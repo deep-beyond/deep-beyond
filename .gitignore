@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 horse.jpg
+deepbond.jpg
 
 # C extensions
 *.so
