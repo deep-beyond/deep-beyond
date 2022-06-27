@@ -29,7 +29,7 @@ semantic segmentationによる馬の領域抽出
 PyTorch Hubで配布されている**DEEPLABV3**を使用。
 semantic segmentationを用いてマスクを生成して馬の領域の抽出を行う。
 
-<img src="./assets/desc2.jpg" style="height:200px"></img>
+<img src="./assets/desc2.jpg" style="height:200px"></img><br>
 図３：深層学習手法による出力結果比較
 
 ## 仮想環境
