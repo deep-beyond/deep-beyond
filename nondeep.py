@@ -84,7 +84,7 @@ def trackbar(bgrimg, hsvimg):
     ENTER_KEY = 13  # Enterキーコード
 
     # 'window'ウィンドウでパラメーター処理
-    cv2.namedWindow("window")
+    cv2.namedWindow("window",cv2.WINDOW_NORMAL) # ウィンドウサイズ：可変
     cv2.createTrackbar("H", "window", 0, 180, dummy)
     cv2.createTrackbar("S", "window", 0, 255, dummy)
     cv2.createTrackbar("V", "window", 0, 255, dummy)
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         default="https://blogimg.goo.ne.jp/user_image/29/58/45dc07ba6673ee855e23253d6ff78098.jpg",
         help="入力画像URL",
     )
-    parser.add_argument("--fname", type=str, default="deepbond.jpg", help="保存ファイル名")
+    parser.add_argument("--fname", type=str, default="deepbond.jpg", help="ダウンロードファイル名")
     parser.add_argument("--display", action="store_false", help="表示フラグ")
     parser.add_argument("--save", action="store_true", help="保存フラグ")
     args = parser.parse_args()
