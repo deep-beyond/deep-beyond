@@ -38,8 +38,6 @@ def getImg(args):
     # 画像を読み込み
     img = cv2.imread(args.fname)  # (H,W,3)
 
-    img = cv2.imread("./img/tokara_horse.jpg")
-
     return img
 
 
