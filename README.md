@@ -1,8 +1,14 @@
 # segmentation-horse
 
 ## 非深層学習ベース
-### 二値化・輪郭抽出による馬の領域抽出
+
+<details>
+
+<summary>
+二値化・輪郭抽出による馬の領域抽出
+
 [ソースコード：extract_contour.py](./extract_contour.py)
+</summary>
 
 トラックバーによって手動でマスクを設定
 
@@ -29,9 +35,16 @@
 <img src="./assets/getcolor.jpg" style="height:300px"></img><br>
 図３：imageウィンドウにおける色取得(表示される画像はHSV画像)
 
+</details>
 
-### GrabCutによる馬の領域抽出
+
+<details>
+
+<summary>
+GrabCutによる馬の領域抽出
+
 [ソースコード：grabcut.py](./grabcut.py)
+</summary>
 
 <img src="./assets/desc2.jpg" style="height:200px"></img><br>
 図４：GrabCutアルゴリズムによる出力結果比較
@@ -52,6 +65,8 @@
 
 【注意】全体の処理を終了させるにはペイント操作時にマウスホイール部をクリックする必要
 
+
+</details>
 
 ## 深層学習ベース
 [ソースコード：deep.py](./deep.py)
