@@ -1,10 +1,11 @@
+import cv2
 import torch
 import urllib
 import argparse
-from torchvision import transforms
 import numpy as np
 from PIL import Image
-import cv2
+from torchvision import transforms
+
 
 # 前処理設定
 preprocess = transforms.Compose(
@@ -15,128 +16,109 @@ preprocess = transforms.Compose(
     ]
 )
 
-# カラーパレット(21クラス分): 馬のみ白、それ以外は黒
-color = [
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    255, 255, 255,   # 馬
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-    0,  0,   0,
-]
+class DeepSegmentation:
+    def __init__(self,colorPath,imgData):
+        """
+        :param colorPath (type:string) 分割色を記載したテキストファイルのパス
+        :param imgData (type:numpy.ndarray) 画像情報
+        """
+        # カラーパレット(21クラス分): 馬のみ白、それ以外は黒
+        color = open(colorPath).read().strip().split("\n")
+        color = [np.array(c.split(",")).astype("int") for c in color]
+        self.color = np.array(color, dtype="uint8")
 
-def displayImg(img):
-    """
-    画像を表示
-    """
-    cv2.imshow("display image", img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        # 画像情報
+        self.img =imgData   # (H,W,3)
 
-
-def getImg(args):
-    """
-    :return 画像データ(ndarray)
-    """
-    if args.mode == "net":
-        # インターネットから画像をダウンロード
-        urllib.request.urlretrieve(args.img_url, args.fname)
-        # 画像を読み込み
-        img = cv2.imread(args.fname)  # (H,W,3)
-
-    elif args.mode == "local":
-        img = cv2.imread(args.fpath)
+        # モデルをダウンロード
+        self.model = torch.hub.load(
+            "pytorch/vision:v0.10.0", "deeplabv3_resnet50", pretrained=True
+        )
+        # モデルを推論モードにする
+        self.model.eval()
     
-    return img
+    def __call__(self):
+        """
+        :return resultimg (type:numpy.ndarray) マスクで切り抜かれた入力画像
+        :return contours (type:list) マスクの輪郭情報
+        """
+        # 前処理
+        inputTensor = preprocess(self.img)  # (3,H,W)
+
+        # 形状変更(バッチを考慮)
+        inputBatch = inputTensor.unsqueeze(0)  # (1,3,H,W)
+
+        # gpuがあるならば適用
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            inputBatch = inputBatch.to(device)
+            self.model.to(device)
+
+        # 推論：モデル実行
+        with torch.no_grad():
+            outputs = self.model(inputBatch)  # [out],[aux]
+        out = outputs["out"][0]  # (21,H,W) : 21 = クラス数
+
+        # 予測確率が最大のものをmaskにする
+        mask = out.argmax(0).byte().cpu().numpy()  # (H,W)
+
+        # ノイズ除去
+        mask = cv2.medianBlur(mask,7)
+
+        # マスクの輪郭を計算
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # numpy -> PIL
+        maskPIL = Image.fromarray(mask)
+
+        # 着色(colorで決定した色にする)
+        maskPIL.putpalette(self.color)
+
+        # PILをRGBモードにする
+        maskPIL = maskPIL.convert('RGB')
+
+        # PIL-> numpy
+        mask = np.asarray(maskPIL)
+
+        # マスク処理
+        resultImg = cv2.bitwise_and(self.img, mask)
+
+        return resultImg, contours
+
+    def displayImg(self, img):
+        cv2.imshow("display image", img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 def main(args):
-    # モデルをダウンロード
-    model = torch.hub.load(
-        "pytorch/vision:v0.10.0", "deeplabv3_resnet50", pretrained=True
-    )
-
-    # モデルを推論モードにする
-    model.eval()
-
     # 画像読み込み
-    img = getImg(args)
-
-    # 前処理
-    input_tensor = preprocess(img)  # (3,H,W)
-
-    # 形状変更(バッチを考慮)
-    input_batch = input_tensor.unsqueeze(0)  # (1,3,H,W)
-
-    # gpuがあるならば適用
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-        input_batch = input_batch.to(device)
-        model.to(device)
-
-    # 推論：モデル実行
-    with torch.no_grad():
-        outputs = model(input_batch)  # [out],[aux]
-    out = outputs["out"][0]  # (21,H,W) : 21 = クラス数
-
-    # 予測確率が最大のものをmaskにする
-    mask = out.argmax(0).byte().cpu().numpy()  # (H,W)
-
-    # numpy -> PIL
-    maskPIL = Image.fromarray(mask)
-
-    # 着色(colorで決定した色にする)
-    maskPIL.putpalette(color)
-
-    # PILをRGBモードにする
-    maskPIL = maskPIL.convert('RGB')
-
-    # PIL-> numpy
-    mask = np.asarray(maskPIL)
-
-    # マスク画像を表示
-    if args.display:
-        displayImg(mask)
-
-    # マスク処理
-    result = cv2.bitwise_and(img, mask)
-
-    # マスクで切り抜いた画像を表示
-    if args.display:
-        displayImg(result)
+    if args.mode == "net":
+        # インターネットから画像をダウンロード
+        urllib.request.urlretrieve(args.imgUrl, "horse.jpg")
+        # 画像を読み込み
+        img = cv2.imread("horse.jpg")
+    elif args.mode == "local":
+        img = cv2.imread(args.imgPath)
     
-    # 保存
-    if args.save:
-        cv2.imwrite("./result.jpg", result)
+    # インスタンス生成(クラスの__init__メソッドを実行)
+    ds = DeepSegmentation(args.colorPath,img)
+    # クラスの__call__メソッドを実行
+    resultImg, contours = ds()
+
+    ds.displayImg(resultImg)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Segmentation")
+    parser = argparse.ArgumentParser(description="Segmentation based Deep Learning")
     parser.add_argument("--mode",type=str,choices=['net', 'local'],default='local',help="入力画像先")
     parser.add_argument(
-        "--img_url",
+        "--imgUrl",
         type=str,
         default="https://prtimes.jp/i/21266/9/resize/d21266-9-237312-1.jpg",
         help="入力画像URL",
     )
-    parser.add_argument("--fpath",type=str,default="./img/tokara_horse.jpg",help="ローカル上の画像パス")
-    parser.add_argument("--fname", type=str, default="horse.jpg", help="ダウンロードファイル名")
-    parser.add_argument("--display", action="store_false", help="表示フラグ")
-    parser.add_argument("--save", action="store_true", help="保存フラグ")
+    parser.add_argument("--imgPath",type=str,default="./img/tokara_horse.jpg",help="ローカル上の画像パス")
+    parser.add_argument("--colorPath",type=str,default="./color.txt",help="色情報ファイルのパス")
     args = parser.parse_args()
     main(args)
