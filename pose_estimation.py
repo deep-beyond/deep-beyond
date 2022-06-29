@@ -80,10 +80,12 @@ def getWithers(cntPos, contours, img):
     toesY = 0  # 足先の座標
 
     # y座標の距離が大きいもの上位3つを探索 hard code !!
-    for i in range(3):
+    for i in range(10):
         _, idx = distanceY[i]
         pos1 = cntPos[idx]
         pos2 = cntPos[idx + 1]
+
+        cv2.line(img, pos1, pos2, (0, 0, 255), thickness=4, lineType=cv2.LINE_AA)
 
         # 2点のx座標がどちらも画像の「左半分」の位置にある場合
         if pos1[0] <= half_w and pos2[0] <= half_w:
@@ -104,7 +106,19 @@ def getWithers(cntPos, contours, img):
     for cnt in contours[0]:
         if wither_posX == cnt[0][0]:
             wither_pos.append([cnt[0][0], cnt[0][1]])
-    
+
+    # 例外：失敗した場合
+    if len(wither_pos)<2:
+        cv2.putText(img,
+                    text="failure",
+                    org=(100,100),
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                    fontScale=2.0,
+                    color=(0, 255, 0),
+                    thickness=2,
+                    lineType=cv2.LINE_4)
+        return 
+
     # 足先に線分の頂点が位置していない場合、足先の座標に変更
     # 2点の中でY座標が大きい方の頂点がtoesYよりも小さければ変更
     if wither_pos[0][1] > wither_pos[1][1]:
@@ -173,7 +187,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--img_url",
         type=str,
-        default="https://blogimg.goo.ne.jp/user_image/29/58/45dc07ba6673ee855e23253d6ff78098.jpg",
+        default="https://cdn-ak.f.st-hatena.com/images/fotolife/g/gourmetfrontier/20220305/20220305060315.jpg",
         help="入力画像URL",
     )
     parser.add_argument(
