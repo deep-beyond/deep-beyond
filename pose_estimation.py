@@ -157,7 +157,7 @@ def main(args):
     # 特定の条件を満たす輪郭の座標を取得
     cntPos = searchCnt(contours)
 
-    # キ甲のx座標を探索
+    # キ甲を探索
     getWithers(cntPos, contours, resultImg)
 
     # 画像を表示
