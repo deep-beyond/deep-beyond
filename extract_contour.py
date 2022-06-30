@@ -1,7 +1,9 @@
 import cv2
 import argparse
-import urllib.request
 import numpy as np
+
+# utils.pyの関数
+from utils import loadImg, displayImg
 
 # 二値化 上限/下限
 upper = (180, 255, 255)
@@ -9,27 +11,6 @@ lower = (0, 0, 0)
 
 # 色定義
 colors = np.zeros(3)
-
-
-def displayImg(img):
-    """
-    画像を表示
-    """
-    cv2.imshow("display image", img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-
-def getImg(args):
-    """
-    :return 画像データ(ndarray)
-    """
-    # インターネットから画像をダウンロード
-    urllib.request.urlretrieve(args.img_url, args.fname)
-    # 画像を読み込み
-    img = cv2.imread(args.fname)  # (H,W,3)
-
-    return img
 
 
 def maskgenerator(img, h, s, v, flg, originimg):
@@ -178,7 +159,7 @@ def trackbar(bgrimg, hsvimg):
 
 def main(args):
     # 画像読み込み
-    bgrimg = getImg(args)
+    bgrimg = loadImg(args)
 
     # HSV化
     hsvimg = cv2.cvtColor(bgrimg, cv2.COLOR_BGR2HSV)
@@ -199,12 +180,17 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Segmentation")
     parser.add_argument(
-        "--img_url",
+        "--mode", type=str, choices=["net", "local"], default="local", help="入力画像先"
+    )
+    parser.add_argument(
+        "--imgUrl",
         type=str,
         default="https://blogimg.goo.ne.jp/user_image/29/58/45dc07ba6673ee855e23253d6ff78098.jpg",
         help="入力画像URL",
     )
-    parser.add_argument("--fname", type=str, default="deepbond.jpg", help="ダウンロードファイル名")
+    parser.add_argument(
+        "--imgPath", type=str, default="./img/tokara_horse.jpg", help="ローカル上の画像パス"
+    )
     parser.add_argument("--display", action="store_false", help="表示フラグ")
     parser.add_argument("--save", action="store_true", help="保存フラグ")
     args = parser.parse_args()
