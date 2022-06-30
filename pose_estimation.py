@@ -1,26 +1,12 @@
 import cv2
-import urllib
 import argparse
 import numpy as np
 
 # deep.pyのDeepSementationクラス
 from deep import DeepSegmentation
 
-
-def getImg(args):
-    """
-    :return 画像データ(ndarray)
-    """
-    if args.mode == "net":
-        # インターネットから画像をダウンロード
-        urllib.request.urlretrieve(args.img_url, args.fname)
-        # 画像を読み込み
-        img = cv2.imread(args.fname)  # (H,W,3)
-
-    elif args.mode == "local":
-        img = cv2.imread(args.fpath)
-
-    return img
+# utils.pyの関数
+from utils import getImg, drawText, drawLine
 
 
 def searchCnt(contours, img, args):
@@ -115,43 +101,6 @@ def getIntersection(contours, wither_posX, delta, bboxH):
         return wither_pos
 
 
-def drawText(img, text, x, y):
-    """
-    画面に文字列を描画
-    """
-    cv2.putText(
-        img,
-        text=text,
-        org=(x, y),
-        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-        fontScale=0.6,
-        color=(0, 255, 0),
-        thickness=4,
-        lineType=cv2.LINE_4,
-    )
-    cv2.putText(
-        img,
-        text=text,
-        org=(x, y),
-        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-        fontScale=0.6,
-        color=(0, 0, 0),
-        thickness=2,
-        lineType=cv2.LINE_4,
-    )
-
-
-def drawLine(img, x1, y1, x2, y2, color):
-    cv2.line(
-        img,
-        (x1, y1),
-        (x2, y2),
-        color,
-        thickness=2,
-        lineType=cv2.LINE_AA,
-    )
-
-
 def getWithers(cntPos, contours, bboxPositon, img, args):
     """
     キ甲の座標情報を取得 & キ甲を描画
@@ -162,7 +111,6 @@ def getWithers(cntPos, contours, bboxPositon, img, args):
     :param bboxY (type:int) 外接矩形のY座標
     :param img (type:numpy.ndarray) 入力画像と同じサイズの空の画像
     """
-    bboxX = bboxPositon[0]
     bboxY = bboxPositon[1]
     bboxH = bboxPositon[2]
     bboxW = bboxPositon[3]
@@ -243,7 +191,7 @@ def getWithers(cntPos, contours, bboxPositon, img, args):
 
     # キ甲のライン
     if args.showinfo:
-        drawLine(img, wither_posX, 0, wither_posX, bboxH, color=(255, 255, 255))
+        drawLine(img, wither_posX, 0, wither_posX, img.shape[0], color=(255, 255, 255))
 
     if len(contours) > 1:
         cntSummary = [cnt for contour in contours for cnt in contour]
@@ -271,6 +219,7 @@ def getWithers(cntPos, contours, bboxPositon, img, args):
     else:
         # 例外：失敗した場合
         drawText(img, "failure", 100, 100)
+        print("failure")
         return
 
     toesY = sum(toesY_vertex) // len(toesY_vertex)
@@ -317,7 +266,8 @@ def main(args):
         # 輪郭描画
         cv2.drawContours(resultImg, contours, -1, (255, 255, 0), 3)
 
-    ds.displayImg(resultImg)
+    if args.display:
+        ds.displayImg(resultImg)
 
     # キ甲を探索
     getWithers(cntPos, contours, bboxPositon, resultImg, args)
@@ -330,12 +280,12 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Segmentation")
     parser.add_argument(
-        "--mode", type=str, choices=["net", "local"], default="local", help="入力画像先"
+        "--mode", type=str, choices=["net", "local"], default="net", help="入力画像先"
     )
     parser.add_argument(
         "--img_url",
         type=str,
-        default="https://cdn-ak.f.st-hatena.com/images/fotolife/g/gourmetfrontier/20220305/20220305060315.jpg",
+        default="https://www-f.keibalab.jp/img/horse/2017102170/2017102170_12.jpg?1656168128",
         help="入力画像URL",
     )
     parser.add_argument(
