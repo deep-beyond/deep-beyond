@@ -9,9 +9,6 @@
 非深層学習ベース
 </summary>
 
-<details>
-
-<summary>
 二値化・輪郭抽出による馬の領域抽出
 
 [ソースコード：extract_contour.py](./extract_contour.py)
@@ -42,16 +39,10 @@
 <img src="./assets/getcolor.jpg" style="height:300px"></img><br>
 図３：imageウィンドウにおける色取得(表示される画像はHSV画像)
 
-</details>
 
-
-
-
-<summary>
 GrabCutによる馬の領域抽出
-
 [ソースコード：grabcut.py](./grabcut.py)
-</summary>
+
 
 <img src="./assets/desc2.jpg" style="height:200px"></img><br>
 図４：GrabCutアルゴリズムによる出力結果比較
@@ -72,10 +63,6 @@ GrabCutによる馬の領域抽出
 
 【注意】全体の処理を終了させるにはペイント操作時にマウスホイール部をクリックする必要
 
-
-</details>
-
-
 </details>
 
 <details>
@@ -95,6 +82,7 @@ semantic segmentationを用いてマスクを生成して馬の領域の抽出�
 
 </details>
 
+<hr>
 
 ## 姿勢推定
 深層学習によるセグメンテーションを応用して姿勢推定を行う。
@@ -120,7 +108,10 @@ conda env create --file env.yaml
 - pillow:9.0.1
 - opencv:4.0.1
 
-## 変更点
+## 主な変更点
+- (2022/6/23)：リポジトリ作成
+- (2022/6/26)：深層学習プログラム作成
+- (2022/6/28)：非深層学習プログラム（輪郭抽出、GrabCutアルゴリズムの対話プログラム）作成
 - (2022/6/29)：姿勢推定プログラムを作成。前足を沿う直線の中線を前足の軸とした。
 - (2022/6/30)：アルゴリズムをよりロバストに。前足の先端の頂点の中点を前足の軸とした。
 
