@@ -1,6 +1,13 @@
 # segmentation-horse
 
-## 非深層学習ベース
+
+## segmentationアプローチ
+
+<details>
+
+<summary>
+非深層学習ベース
+</summary>
 
 <details>
 
@@ -38,7 +45,7 @@
 </details>
 
 
-<details>
+
 
 <summary>
 GrabCutによる馬の領域抽出
@@ -68,6 +75,13 @@ GrabCutによる馬の領域抽出
 
 </details>
 
+
+</details>
+
+<details>
+
+<summary>深層学習ベース</summary>
+
 ## 深層学習ベース
 [ソースコード：deep.py](./deep.py)
 
@@ -77,7 +91,24 @@ PyTorch Hubで配布されている**DEEPLABV3**を使用。
 semantic segmentationを用いてマスクを生成して馬の領域の抽出を行う。
 
 <img src="./assets/desc3.jpg" style="height:200px"></img><br>
-図３：深層学習手法による出力結果比較
+図７：深層学習手法による出力結果比較
+
+</details>
+
+
+## 姿勢推定
+深層学習によるセグメンテーションを応用して姿勢推定を行う。
+
+<img src="./assets/pose.jpg" style="height:300px"></img><br></br>
+図８：前足の推定
+
+### アルゴリズム
+1. Deeplabv3を用いてマスクを生成
+2. マスクから輪郭を生成、近似した輪郭を用いて姿勢推定を行う
+3. 輪郭の線分の座標位置、角度から前足の線分の座標情報を抽出
+4. 前足の線分情報を用いて前足の先端の頂点の中点を前足の軸とする
+5. マスクによる輪郭とその中点を通る直線の交点を求める<br>
+ただし、必ずしも輪郭と中点が交わることがないため、ずれて輪郭と交わる誤差を許容する
 
 ## 仮想環境
 ```
@@ -88,6 +119,10 @@ conda env create --file env.yaml
 - numpy:1.22.3
 - pillow:9.0.1
 - opencv:4.0.1
+
+## 変更点
+- (2022/6/29)：姿勢推定プログラムを作成。前足を沿う直線の中線を前足の軸とした。
+- (2022/6/30)：アルゴリズムをよりロバストに。前足の先端の頂点の中点を前足の軸とした。
 
 ## 参考サイト
 - [GrabCutを使った対話的前景領域抽出](http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_grabcut/py_grabcut.html)
