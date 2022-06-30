@@ -2,18 +2,18 @@ import cv2
 import urllib
 
 
-def getImg(args):
+def loadImg(args):
     """
     :return 画像データ(ndarray)
     """
     if args.mode == "net":
         # インターネットから画像をダウンロード
-        urllib.request.urlretrieve(args.img_url, args.fname)
+        urllib.request.urlretrieve(args.imgUrl, "./horse.jpg")
         # 画像を読み込み
-        img = cv2.imread(args.fname)  # (H,W,3)
+        img = cv2.imread("./horse.jpg")  # (H,W,3)
 
     elif args.mode == "local":
-        img = cv2.imread(args.fpath)
+        img = cv2.imread(args.imgPath)
 
     return img
 
@@ -44,7 +44,7 @@ def drawText(img, text, x, y):
     )
 
 
-def drawLine(img, x1, y1, x2, y2, color):
+def drawLine(img, x1, y1, x2, y2, color=(255,255,255)):
     cv2.line(
         img,
         (x1, y1),
@@ -53,3 +53,8 @@ def drawLine(img, x1, y1, x2, y2, color):
         thickness=2,
         lineType=cv2.LINE_AA,
     )
+
+def displayImg(img):
+    cv2.imshow("display image", img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()

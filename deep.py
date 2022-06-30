@@ -5,7 +5,7 @@ import argparse
 import numpy as np
 from PIL import Image
 from torchvision import transforms
-
+from utils import loadImg, displayImg
 
 # 前処理設定
 preprocess = transforms.Compose(
@@ -85,28 +85,16 @@ class DeepSegmentation:
 
         return resultImg, contours
 
-    def displayImg(self, img):
-        cv2.imshow("display image", img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-
-
 def main(args):
     # 画像読み込み
-    if args.mode == "net":
-        # インターネットから画像をダウンロード
-        urllib.request.urlretrieve(args.imgUrl, "horse.jpg")
-        # 画像を読み込み
-        img = cv2.imread("horse.jpg")
-    elif args.mode == "local":
-        img = cv2.imread(args.imgPath)
+    img = loadImg(args)
     
     # インスタンス生成(クラスの__init__メソッドを実行)
     ds = DeepSegmentation(args.colorPath,img)
     # クラスの__call__メソッドを実行
     resultImg, contours = ds()
 
-    ds.displayImg(resultImg)
+    displayImg(resultImg)
 
 
 if __name__ == "__main__":
