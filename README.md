@@ -95,8 +95,7 @@ semantic segmentationを用いてマスクを生成して馬の領域の抽出�
 2. マスクから輪郭を生成、近似した輪郭を用いて姿勢推定を行う
 3. 輪郭の線分の座標位置、角度から前足の線分の座標情報を抽出
 4. 前足の線分情報を用いて前足の先端の頂点の中点を前足の軸とする
-5. マスクによる輪郭とその中点を通る直線の交点を求める<br>
-ただし、必ずしも輪郭と中点が交わることがないため、ずれて輪郭と交わる誤差を許容する
+5. マスクによる輪郭とその中点を通る直線の交点を求める
 
 ## 仮想環境
 ```
@@ -115,6 +114,7 @@ conda env create --file env.yaml
 - (2022/6/29)：姿勢推定プログラムを作成。前足を沿う直線の中線を前足の軸とした。
 - (2022/6/30)：アルゴリズムをよりロバストに。前足の先端の頂点の中点を前足の軸とした。
 - (2022/7/1)：外部から使用できるように全てのアプローチでクラス化。透過画像の出力が可能に。
+            ：誤差デルタを辞め、アルファ値を用いて輪郭とキ甲の直線の交点を求める
 
 ## 参考サイト
 - [GrabCutを使った対話的前景領域抽出](http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_grabcut/py_grabcut.html)
@@ -123,3 +123,6 @@ conda env create --file env.yaml
 - [OpenCV4Python10:OpenCV(numpy.ndarray)とPyTorch Hubで画像分類](https://note.com/fz5050/n/nfe3e087a8949)
 - [Pythonでマスク画像を作る方法（３選）](https://water2litter.net/rum/post/python_image_mask/)
 - [Semantic Segmentationの実装](https://qiita.com/MMsk0914/items/2f64a741e04b36cd1c76)
+
+## LICENSE
+[Apache License 2.0](./LICENSE)
