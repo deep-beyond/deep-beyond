@@ -50,7 +50,7 @@ GrabCutによる馬の領域抽出
 1. バウンディングボックスによる領域選択
     マウス左クリックを押し続けてバウンディングボックスを作成
 
-    <img src="./assets/cutimg.jpg" style="height:300px"></img><br>
+    <img src="./assets/cropping.jpg" style="height:300px"></img><br>
     図５：アルゴリズム適用領域選択
 
 2. ペイント操作によって領域修正<br>
