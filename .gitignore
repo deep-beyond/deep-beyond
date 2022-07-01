@@ -4,6 +4,8 @@ __pycache__/
 *$py.class
 horse.jpg
 deepbond.jpg
+result.jpg
+result.png
 
 # C extensions
 *.so
