@@ -11,7 +11,7 @@
 
 二値化・輪郭抽出による馬の領域抽出
 
-[ソースコード：extract_contour.py](./extract_contour.py)
+[ソースコード：contour.py](./contour.py)
 </summary>
 
 トラックバーによって手動でマスクを設定
@@ -114,6 +114,7 @@ conda env create --file env.yaml
 - (2022/6/28)：非深層学習プログラム（輪郭抽出、GrabCutアルゴリズムの対話プログラム）作成
 - (2022/6/29)：姿勢推定プログラムを作成。前足を沿う直線の中線を前足の軸とした。
 - (2022/6/30)：アルゴリズムをよりロバストに。前足の先端の頂点の中点を前足の軸とした。
+- (2022/7/1)：外部から使用できるように全てのアプローチでクラス化。透過画像の出力が可能に。
 
 ## 参考サイト
 - [GrabCutを使った対話的前景領域抽出](http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_grabcut/py_grabcut.html)
