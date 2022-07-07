@@ -6,6 +6,7 @@ horse.jpg
 deepbond.jpg
 result.jpg
 result.png
+*.svg
 
 # C extensions
 *.so
