@@ -116,6 +116,7 @@ conda env create --file env.yaml
 - (2022/7/1)
     - 外部から使用できるように全てのアプローチでクラス化。透過画像の出力が可能に。
     - 誤差デルタを辞め、アルファ値を用いて輪郭とキ甲の直線の交点を求める
+- (2022/7/7)：胴の検出が可能に。キ甲と胴の長さを算出可能。
 
 ## 参考サイト
 - [GrabCutを使った対話的前景領域抽出](http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_grabcut/py_grabcut.html)

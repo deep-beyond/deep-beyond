@@ -49,9 +49,8 @@ def getContourVertex(contours, img, args):
                 )
 
             # 輪郭線の近似,描画
-            approx = cv2.approxPolyDP(contour, 0.01 * arclen, True)
-            if args.showinfo:
-                cv2.drawContours(img, [approx], -1, (0, 255, 255), 2)
+            approx = cv2.approxPolyDP(contour, 0.005 * arclen, True)        # 0.01 original
+            cv2.drawContours(img, [approx], -1, (0, 255, 255), 2)
 
             # 条件を満たす外接矩形の情報を記録
             condition_bbox_x = bbox_x
@@ -122,6 +121,8 @@ def getWithersPosition(contour_vertex, bbox_position, rawimg, descimg, args):
     :param bbox_y (type:int) 外接矩形のY座標
     :param rawimg (type:numpy.ndarray) 生の入力画像
     :param descimg (type:numpy.ndarray) 説明する画像(テキストや直線の描画などに使用)
+    :return wither_pos_x (type:int) キ甲のx座標
+    :return wither_pos (type:list) キ甲を形成する2点の座標
     """
     bbox_x = bbox_position[0]
     bbox_y = bbox_position[1]
@@ -156,6 +157,7 @@ def getWithersPosition(contour_vertex, bbox_position, rawimg, descimg, args):
     toes_pos_xs = []
     toes_pos_ys = []
 
+    # -1 にしないとfor文最後の実行において終点で配列外参照になる
     for i in range(len(contour_vertex) - 1):
         x1, y1 = contour_vertex[i]  # 始点
         x2, y2 = contour_vertex[i + 1]  # 終点
@@ -199,8 +201,8 @@ def getWithersPosition(contour_vertex, bbox_position, rawimg, descimg, args):
             descimg, (wither_pos_x, 0), (wither_pos_x, descimg.shape[0]), color=(255, 255, 255)
         )
 
-    if args.display:
-        displayImg(descimg)
+    # if args.display:
+    #     displayImg(descimg)
 
     """
     3. キ甲の長さを探索(キ甲と輪郭の交点を探索)
@@ -224,9 +226,99 @@ def getWithersPosition(contour_vertex, bbox_position, rawimg, descimg, args):
             wither_pos[1][1] = toes_pos_y
     
     # キ甲の正確なラインを描画
-    drawLine(descimg,tuple(wither_pos[0]),tuple(wither_pos[1]),(0,0,255))
-    drawText(descimg, str(wither_pos[0]), wither_pos[0][0] + 20, wither_pos[0][1])
-    drawText(descimg, str(wither_pos[1]), wither_pos[1][0] + 20, wither_pos[1][1])
+    if args.display:
+        drawLine(descimg,tuple(wither_pos[0]),tuple(wither_pos[1]),(0,0,255))
+        drawText(descimg, str(wither_pos[0]), wither_pos[0][0] + 20, wither_pos[0][1])
+        drawText(descimg, str(wither_pos[1]), wither_pos[1][0] + 20, wither_pos[1][1])
+
+    return wither_pos_x, wither_pos
+
+
+def getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args):
+    """
+    胴を探索
+    :param contour_vertex (type:list) 頂点10以上の近似輪郭の座標リスト
+    :param bbox_position (type:tuple) 外接矩形座標(x,y,h,w)
+    :param wither_pos_x (type:int) キ甲のx座標
+    :param descimg (type:numpy.ndarray) 説明する画像(テキストや直線の描画などに使用)
+    :return torso_pos_x (type:int) 胴のx情報
+    """
+    bbox_y = bbox_position[1]
+    bbox_h = bbox_position[2]
+
+    """
+    1. 探索範囲を設定
+    """
+
+    # 胴の終点を探索するため外接矩形の「キ甲より右側（尻側）」「上側1/3」の範囲を見る
+    onethird_h = bbox_h // 3 + bbox_y
+
+    # 範囲のラインを描画
+    if args.showinfo:
+        drawLine(descimg, (0, onethird_h), (descimg.shape[1], onethird_h), (255, 0, 255))
+        drawLine(descimg, (wither_pos_x, 0), (wither_pos_x, descimg.shape[0]), (255, 0, 255))
+
+    """
+    2. 胴のx座標を探索
+    """
+    # 時刻t-1における傾きとx座標の情報
+    prev_tilt = 0
+    prev_x = 0
+
+    # 胴のX座標の頂点
+    torso_pos_x = 0
+
+    # 胴の終点であるフラグ
+    torso_flg = False
+    
+    for i in range(len(contour_vertex)):
+        x1, y1 = contour_vertex[i]  # 始点
+
+        # 配列外参照にならないようにループさせる
+        if i == len(contour_vertex) - 1:
+            x2, y2 = contour_vertex[0]  # 終点
+        else:
+            x2, y2 = contour_vertex[i + 1]  # 終点
+
+        # 「キ甲より右側（尻側）」「上側1/3」の範囲以外ならば処理しない
+        if x1 < wither_pos_x or y1 > onethird_h:
+            continue
+
+        distance_x = x2 - x1
+        distance_y = y2 - y1
+        tilt = round(distance_y / distance_x, 1)
+        # print(tilt)
+
+        # 傾きが正->負->正になった場合、負の箇所を胴の終点とする
+        if torso_flg and tilt > 0:
+            torso_pos_x = prev_x
+            break
+
+        if tilt <= 0 and prev_tilt :
+            torso_flg = True
+
+        if args.showinfo:
+            cv2.circle(descimg, (x1, y1), 5, (0, 0, 255), thickness=-1)
+
+        # 時刻tの情報を時刻t-1の情報にする
+        prev_tilt = tilt
+        prev_x = x1
+
+    # 胴の終点を通る縦の直線描画
+    if args.showinfo:
+        drawLine(
+            descimg, (torso_pos_x, 0), (torso_pos_x, descimg.shape[0]), color=(255, 255, 255)
+        )
+
+    # 胴を描画
+    if args.display:
+        torso_front_pos = (wither_pos_x, int(descimg.shape[0]/2))
+        torso_back_pos = (torso_pos_x, int(descimg.shape[0]/2))
+        drawLine(descimg, torso_front_pos, torso_back_pos, color=(0, 0, 255))
+        cv2.circle(descimg, (torso_back_pos[0], torso_back_pos[1]), 5, (0, 0, 255), thickness=-1)
+        drawText(descimg, "x:"+str(torso_pos_x), torso_back_pos[0], torso_back_pos[1]-30)
+
+    return torso_pos_x
 
 
 def main(args):
@@ -248,7 +340,12 @@ def main(args):
         cv2.drawContours(descimg, contours, -1, (255, 255, 0), 3)  # 輪郭描画
 
     # キ甲を探索
-    getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
+    wither_pos_x, wither_pos = getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
+    print("キ甲の長さ:",wither_pos[1][1] - wither_pos[0][1])
+
+    # 胴を探索
+    torso_pos_x = getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args)
+    print("胴の長さ:", torso_pos_x - wither_pos[0][0])
 
     if args.display:
         displayImg(descimg)  # 画像を表示
@@ -257,7 +354,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Segmentation")
     parser.add_argument(
-        "--mode", type=str, choices=["net", "local"], default="local", help="入力画像先"
+        "--mode", type=str, choices=["net", "local"], default="net", help="入力画像先"
     )
     parser.add_argument(
         "--img_url",
