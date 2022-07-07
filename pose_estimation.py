@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 import argparse
 from copy import deepcopy
 
@@ -321,6 +322,60 @@ def getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args):
     return torso_pos_x
 
 
+def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
+    """
+    ともを探索
+    :param
+    """
+
+    """
+    1. 探索範囲を設定
+    """
+    bbox_x = bbox_position[0]
+    bbox_y = bbox_position[1]
+    bbox_h = bbox_position[2]
+    bbox_w = bbox_position[3]
+
+    img = img[bbox_y : bbox_y+int(bbox_h/2), torso_pos_x: bbox_x+bbox_w]
+    h, w = img.shape[:2]
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = cv2.GaussianBlur(img, (3, 3), 3)
+    img = cv2.Canny(img, 100, 200)
+    img = cv2.bitwise_not(img)
+    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    displayImg(img)
+
+    """
+    2. 尻の先端部のx座標を探索
+    """
+    hip_pos_xs = []
+    flg = False
+    black_flg = False
+    for y in range(h-1,int(h/2),-1):
+        if flg:
+            break
+        for x in range(w):
+            if np.all(img[y][x] <= 0):  # もし黒色ならば
+                black_flg = True
+                # print(x,y) 
+                img[y][x] = [0,0,255]
+                # displayImg(img)  
+                hip_pos_xs.append(x)   # 各幅の最も左の黒いピクセルをhip_pos_xとする
+                break
+
+            elif w-x<20 and black_flg:
+                break
+
+    hip_pos_x = max(hip_pos_xs)
+    drawLine(img, (hip_pos_x,0), (hip_pos_x,h), color=(0, 0, 255))
+    displayImg(img)
+    
+    # グローバル座標に変換
+    hip_pos_x += torso_pos_x
+    drawLine(descimg, (hip_pos_x,descimg.shape[0]), (hip_pos_x,0), color=(0, 0, 255))
+    displayImg(descimg)
+
+
 def main(args):
     # 画像読み込み
     img = loadImg(mode=args.mode, img_url=args.img_url, img_path=args.img_path)
@@ -347,6 +402,10 @@ def main(args):
     torso_pos_x = getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args)
     print("胴の長さ:", torso_pos_x - wither_pos[0][0])
 
+    # ともを探索
+    getHindlimb(torso_pos_x, descimg, bbox_position, deepcopy(resultimg), args)
+
+
     if args.display:
         displayImg(descimg)  # 画像を表示
 
@@ -359,7 +418,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--img_url",
         type=str,
-        default="https://blogimg.goo.ne.jp/user_image/29/58/45dc07ba6673ee855e23253d6ff78098.jpg",
+        default="https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg",
         help="入力画像URL",
     )
     parser.add_argument(
@@ -374,7 +433,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--color_path", type=str, default="./color.txt", help="色情報ファイルのパス"
     )
-    parser.add_argument("--showinfo", action="store_true", help="詳細な情報を表示するか")
+    parser.add_argument("--showinfo", action="store_false", help="詳細な情報を表示するか")
     args = parser.parse_args()
 
     assert (
@@ -382,3 +441,32 @@ if __name__ == "__main__":
     ), "jpg format can't transparent"
 
     main(args)
+
+"""
+成功例
+default="https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
+default="https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
+default="https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
+default="https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
+default="https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
+default="https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
+default="https://uma-furi.com/wp-content/uploads/2022/06/image.png",
+default="https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
+default="https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
+default="https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",
+default="https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
+default="https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
+default="https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg",
+default="https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg",
+"""
+
+"""
+失敗例
+default="https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
+default="https://kyoto-tc.jp/images/club/2020/01/side.jpg",
+default="https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
+default="https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
+default="https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
+default="https://www-f.keibalab.jp/img/upload/focus/202005/200524_myrhapsody.jpg?1590281058",
+default="https://www-f.keibalab.jp/img/upload/focus/201705/170521_admirable02.jpg?1495355466",
+"""
