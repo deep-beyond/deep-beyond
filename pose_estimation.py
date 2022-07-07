@@ -336,14 +336,61 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
     bbox_h = bbox_position[2]
     bbox_w = bbox_position[3]
 
+    # バウンディングボックス内の値の平均値（閾値決定に使用？）
+    avg = int(np.sum(img[bbox_y : bbox_y+bbox_h, bbox_x: bbox_x+bbox_w]) / (bbox_h*bbox_w))
+    print(avg)
+
+    # 画像の尻部分のみ着目
     img = img[bbox_y : bbox_y+int(bbox_h/2), torso_pos_x: bbox_x+bbox_w]
     h, w = img.shape[:2]
+    
+    # グレースケール化
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.GaussianBlur(img, (3, 3), 3)
-    img = cv2.Canny(img, 100, 200)
-    img = cv2.bitwise_not(img)
-    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    # 二値化のパラメーターが一番重要そう
+    
+    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 51, 20)
+
+    # #中央値フィルタ（ゴマ塩ノイズ除去）
+    img = cv2.medianBlur(img,5)
+
+    # オープニング
+    # kernel = np.ones((3,3),np.uint8)
+    # img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
+
+    # クロージング
+    # kernel = np.ones((3,3),np.uint8)
+    # img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
+
     displayImg(img)
+
+    # 候補
+    # モルフォロジー勾配処理
+
+    # 閾値決定が必要
+
+    # if avg < 200:
+    #     img = cv2.GaussianBlur(img, (3, 3), 3)
+    #     img = cv2.Canny(img, 100, 200)
+    # elif avg > 254:
+    #     img = cv2.GaussianBlur(img, (5, 5), 3)
+    #     img = cv2.Canny(img, 10, 100)
+    # else:
+    #     img = cv2.GaussianBlur(img, (1, 1), 3)
+    #     img = cv2.Canny(img, 100, 200)
+
+    # if avg < 110:
+    #     img = cv2.GaussianBlur(img, (5, 5), 3)
+    #     img = cv2.Canny(img, 10, 100)
+    # else:
+    #     img = cv2.GaussianBlur(img, (3, 3), 3)
+    #     img = cv2.Canny(img, 100, 200)
+
+    # img = cv2.bitwise_not(img)
+
+    # displayImg(img)
+    
+    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
     """
     2. 尻の先端部のx座標を探索
@@ -377,33 +424,64 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
 
 
 def main(args):
-    # 画像読み込み
-    img = loadImg(mode=args.mode, img_url=args.img_url, img_path=args.img_path)
+    inputs = [
+        "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
+        "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
+        "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
+        "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
+        "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
+        "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
+        "https://uma-furi.com/wp-content/uploads/2022/06/image.png",       
+        "https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
+        "https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
+        "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",     
+        "https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
+        "https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
+        "https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg" 
+    ]
 
-    # インスタンス生成(クラスの__init__メソッドを実行)
-    ds = DeepSegmentation(img, args.color_path, args.transparent)
-    # クラスの__call__メソッドを実行
-    resultimg, contours = ds()  # resultimg shape=(H,W,C,A)
+    # inputs = [
+    #     "https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
+    #     "https://kyoto-tc.jp/images/club/2020/01/side.jpg",
+    #     "https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
+    #     "https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
+    #     "https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
+    #     "https://www-f.keibalab.jp/img/upload/focus/202005/200524_myrhapsody.jpg?1590281058",
+    #     "https://www-f.keibalab.jp/img/upload/focus/201705/170521_admirable02.jpg?1495355466",
+    #     "https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg", # 192 
+    # ]
 
-    # 説明するための画像(範囲のラインや座標値テキストの描画などに使用)
-    descimg = deepcopy(resultimg)
+    for i in inputs:
+        print(i)
 
-    # 特定の条件を満たす輪郭の座標を取得
-    contour_vertex, bbox_position = getContourVertex(contours, descimg, args)
+        # 画像読み込み
+        # img = loadImg(mode=args.mode, img_url=args.img_url, img_path=args.img_path)
+        img = loadImg(mode=args.mode, img_url=i,  img_path=args.img_path)
 
-    if args.showinfo:
-        cv2.drawContours(descimg, contours, -1, (255, 255, 0), 3)  # 輪郭描画
+        # インスタンス生成(クラスの__init__メソッドを実行)
+        ds = DeepSegmentation(img, args.color_path, args.transparent)
+        # クラスの__call__メソッドを実行
+        resultimg, contours = ds()  # resultimg shape=(H,W,C,A)
 
-    # キ甲を探索
-    wither_pos_x, wither_pos = getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
-    print("キ甲の長さ:",wither_pos[1][1] - wither_pos[0][1])
+        # 説明するための画像(範囲のラインや座標値テキストの描画などに使用)
+        descimg = deepcopy(resultimg)
 
-    # 胴を探索
-    torso_pos_x = getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args)
-    print("胴の長さ:", torso_pos_x - wither_pos[0][0])
+        # 特定の条件を満たす輪郭の座標を取得
+        contour_vertex, bbox_position = getContourVertex(contours, descimg, args)
 
-    # ともを探索
-    getHindlimb(torso_pos_x, descimg, bbox_position, deepcopy(resultimg), args)
+        if args.showinfo:
+            cv2.drawContours(descimg, contours, -1, (255, 255, 0), 3)  # 輪郭描画
+
+        # キ甲を探索
+        wither_pos_x, wither_pos = getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
+        print("キ甲の長さ:",wither_pos[1][1] - wither_pos[0][1])
+
+        # 胴を探索
+        torso_pos_x = getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args)
+        print("胴の長さ:", torso_pos_x - wither_pos[0][0])
+
+        # ともを探索
+        getHindlimb(torso_pos_x, descimg, bbox_position, deepcopy(resultimg), args)
 
 
     if args.display:
@@ -418,7 +496,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--img_url",
         type=str,
-        default="https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg",
+        default="https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
         help="入力画像URL",
     )
     parser.add_argument(
@@ -444,29 +522,34 @@ if __name__ == "__main__":
 
 """
 成功例
-default="https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
-default="https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
-default="https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
-default="https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
-default="https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
-default="https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
-default="https://uma-furi.com/wp-content/uploads/2022/06/image.png",
-default="https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
-default="https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
-default="https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",
-default="https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
-default="https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
-default="https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg",
-default="https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg",
+    inputs = [
+        "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
+        "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
+        "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
+        "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
+        "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
+        "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
+        "https://uma-furi.com/wp-content/uploads/2022/06/image.png",       
+        "https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
+        "https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
+        "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",     
+        "https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
+        "https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
+        "https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg" 
+    ]
+
 """
 
 """
 失敗例
-default="https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
-default="https://kyoto-tc.jp/images/club/2020/01/side.jpg",
-default="https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
-default="https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
-default="https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
-default="https://www-f.keibalab.jp/img/upload/focus/202005/200524_myrhapsody.jpg?1590281058",
-default="https://www-f.keibalab.jp/img/upload/focus/201705/170521_admirable02.jpg?1495355466",
+    inputs = [
+        "https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
+        "https://kyoto-tc.jp/images/club/2020/01/side.jpg",
+        "https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
+        "https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
+        "https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
+        "https://www-f.keibalab.jp/img/upload/focus/202005/200524_myrhapsody.jpg?1590281058",
+        "https://www-f.keibalab.jp/img/upload/focus/201705/170521_admirable02.jpg?1495355466",
+        "https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg", # 192 
+    ]
 """
