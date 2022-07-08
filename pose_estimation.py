@@ -336,31 +336,40 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
     bbox_h = bbox_position[2]
     bbox_w = bbox_position[3]
 
-    # バウンディングボックス内の値の平均値（閾値決定に使用？）
+    # バウンディングボックス内の値の平均値（閾値決定に使用）
     avg = int(np.sum(img[bbox_y : bbox_y+bbox_h, bbox_x: bbox_x+bbox_w]) / (bbox_h*bbox_w))
-    print(avg)
+    hsvimg = cv2.cvtColor(img[bbox_y : bbox_y+bbox_h, bbox_x: bbox_x+bbox_w], cv2.COLOR_BGR2HSV)
+    h = hsvimg[:,:,0]
+    s = hsvimg[:,:,1]
+    v = hsvimg[:,:,2]
+    avg_h = int(np.sum(h) / (bbox_h*bbox_w))
+    avg_s = int(np.sum(s) / (bbox_h*bbox_w))
+    avg_v = int(np.sum(v) / (bbox_h*bbox_w))
+    print(avg,avg_h,avg_s,avg_v)
 
     # 画像の尻部分のみ着目
     img = img[bbox_y : bbox_y+int(bbox_h/2), torso_pos_x: bbox_x+bbox_w]
     h, w = img.shape[:2]
-    
+
+    # コントラスト調整（二値化、エッジ強調のため)（閾値決定が重要）
+    alpha = 2.5 # コントラスト項目
+    beta = 0    # 明るさ項目
+    img = cv2.convertScaleAbs(img,alpha = alpha,beta = beta)
+    displayImg(img)
+
     # グレースケール化
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 二値化のパラメーターが一番重要そう# 閾値決定が必要
-    
-    # img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 51, 20)
+    # ヒストグラム平坦化(エッジ強調のため) -> 強調されすぎてしまった
 
-    th = int(11 * avg / (150- avg/15))
-    if th %2 == 0:
-        th+=1
-    print(th)
-    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY, th , 15) # 15 or 20 , 11 以下ならば精度下がる
+    # 二値化（閾値決定が重要）
+    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 11, 20)
+    img = cv2.medianBlur(img, ksize=3)
     displayImg(img)
 
-    # 候補
-    # モルフォロジー勾配処理
-
+    # 線膨張（線をはっきりさせる） -> さほど必要性がないかもしれない
+    
+    # BGR化(探索場所を明瞭に赤色にするため)
     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
     """
@@ -376,7 +385,7 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
             if np.all(img[y][x] <= 0):  # もし黒色ならば
                 black_flg = True
                 # print(x,y) 
-                img[y][x] = [0,0,255]
+                img[y][x] = [0,0,255]   # 探索場所を赤色にする
                 # displayImg(img)  
                 hip_pos_xs.append(x)   # 各幅の最も左の黒いピクセルをhip_pos_xとする
                 break
@@ -396,10 +405,10 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
 
 def main(args):
     inputs = [
-        # "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
-        # "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
-        # "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
-        # "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
+        "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
+        "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
+        "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
+        "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
         "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
         "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
         "https://uma-furi.com/wp-content/uploads/2022/06/image.png",       
