@@ -347,49 +347,20 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
     # グレースケール化
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 二値化のパラメーターが一番重要そう
+    # 二値化のパラメーターが一番重要そう# 閾値決定が必要
     
-    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 51, 20)
+    # img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 51, 20)
 
-    # #中央値フィルタ（ゴマ塩ノイズ除去）
-    img = cv2.medianBlur(img,5)
-
-    # オープニング
-    # kernel = np.ones((3,3),np.uint8)
-    # img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-
-    # クロージング
-    # kernel = np.ones((3,3),np.uint8)
-    # img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
-
+    th = int(11 * avg / (150- avg/15))
+    if th %2 == 0:
+        th+=1
+    print(th)
+    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY, th , 15) # 15 or 20 , 11 以下ならば精度下がる
     displayImg(img)
 
     # 候補
     # モルフォロジー勾配処理
 
-    # 閾値決定が必要
-
-    # if avg < 200:
-    #     img = cv2.GaussianBlur(img, (3, 3), 3)
-    #     img = cv2.Canny(img, 100, 200)
-    # elif avg > 254:
-    #     img = cv2.GaussianBlur(img, (5, 5), 3)
-    #     img = cv2.Canny(img, 10, 100)
-    # else:
-    #     img = cv2.GaussianBlur(img, (1, 1), 3)
-    #     img = cv2.Canny(img, 100, 200)
-
-    # if avg < 110:
-    #     img = cv2.GaussianBlur(img, (5, 5), 3)
-    #     img = cv2.Canny(img, 10, 100)
-    # else:
-    #     img = cv2.GaussianBlur(img, (3, 3), 3)
-    #     img = cv2.Canny(img, 100, 200)
-
-    # img = cv2.bitwise_not(img)
-
-    # displayImg(img)
-    
     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
     """
@@ -425,10 +396,10 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
 
 def main(args):
     inputs = [
-        "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
-        "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
-        "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
-        "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
+        # "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
+        # "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
+        # "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
+        # "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
         "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
         "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
         "https://uma-furi.com/wp-content/uploads/2022/06/image.png",       
