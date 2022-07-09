@@ -353,8 +353,7 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
 
     # コントラスト調整（二値化、エッジ強調のため)（閾値決定が重要）
     alpha = 2.5 # コントラスト項目
-    beta = 0    # 明るさ項目
-    img = cv2.convertScaleAbs(img,alpha = alpha,beta = beta)
+    img = cv2.convertScaleAbs(img,alpha = alpha)
     displayImg(img)
 
     # グレースケール化
@@ -363,11 +362,18 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
     # ヒストグラム平坦化(エッジ強調のため) -> 強調されすぎてしまった
 
     # 二値化（閾値決定が重要）
+    img = cv2.bilateralFilter(img,9,75,75)  # エッジ残しながらブラー
+    displayImg(img)
+
     img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 11, 20)
-    img = cv2.medianBlur(img, ksize=3)
     displayImg(img)
 
     # 線膨張（線をはっきりさせる） -> さほど必要性がないかもしれない
+    img = cv2.bitwise_not(img)
+    kernel = np.ones((3,3),np.uint8)
+    img = cv2.dilate(img,kernel,iterations = 1)
+    img = cv2.bitwise_not(img)
+    displayImg(img)
     
     # BGR化(探索場所を明瞭に赤色にするため)
     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
