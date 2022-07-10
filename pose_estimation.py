@@ -3,6 +3,8 @@ import numpy as np
 import argparse
 from copy import deepcopy
 
+from pyparsing import PrecededBy
+
 # deep.pyのDeepSementationクラス
 from deep import DeepSegmentation
 
@@ -368,11 +370,18 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
     img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 11, 20)
     displayImg(img)
 
-    # 線膨張（線をはっきりさせる） -> さほど必要性がないかもしれない
+    # 線膨張（線をはっきりさせる） メディアンフィルタが効果的になる
     img = cv2.bitwise_not(img)
     kernel = np.ones((3,3),np.uint8)
     img = cv2.dilate(img,kernel,iterations = 1)
     img = cv2.bitwise_not(img)
+    displayImg(img)
+
+    # メディアンフィルタ
+    img = cv2.medianBlur(img, ksize=5)  # ksize >= 7 の場合情報が欠落してしまう
+    displayImg(img)
+    for _ in range(3):
+        img = cv2.medianBlur(img, ksize=3)
     displayImg(img)
     
     # BGR化(探索場所を明瞭に赤色にするため)
@@ -381,25 +390,46 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
     """
     2. 尻の先端部のx座標を探索
     """
-    hip_pos_xs = []
-    flg = False
-    black_flg = False
-    for y in range(h-1,int(h/2),-1):
-        if flg:
+    hip_pos_xs = [] # 候補となるx座標を記録
+    prev_x = None   # 前回施行のx座標
+    end_flg = False
+    length = 0  # 線分の長さ(ノイズ対策)
+
+    # 一番下から半分までの高さを探索
+    for y in range(h-1,int(h/2),-1):    
+        if end_flg:
             break
-        for x in range(w):
-            if np.all(img[y][x] <= 0):  # もし黒色ならば
-                black_flg = True
+        # 右から10pxは尻の先端ではないと仮定し省略
+        for x in range(w-10):
+            # 画素が黒の場合
+            if np.all(img[y][x] <= 0):  
+
+                if not prev_x is None:
+                    print("prev_x - x:",prev_x-x)
+                    if 0 <= x - prev_x < 5:  # 右上に伸びる連続性がある場合
+                        length += 1
+                    elif prev_x - x > 10:   # ノイズの場合
+                        print("noise")
+                        continue
+                    # 連続性が途絶え、かつ線分の長さがある程度長い場合、終了
+                    elif x - prev_x > 5 and length > 10: # 連続性が途絶えた場合
+                        end_flg = True
+                        break
+                    else:
+                        length = 0
+
                 # print(x,y) 
-                img[y][x] = [0,0,255]   # 探索場所を赤色にする
+                # print("length:",length)
+                img[y][x] = [0,0,255]
                 # displayImg(img)  
+
                 hip_pos_xs.append(x)   # 各幅の最も左の黒いピクセルをhip_pos_xとする
+                prev_x = x  # 前回のx座標を記録
                 break
 
-            elif w-x<20 and black_flg:
-                break
 
-    hip_pos_x = max(hip_pos_xs)
+    hip_pos_x = max(hip_pos_xs) # 候補となる複数のx座標の最大値を尻の先端部とする
+
     drawLine(img, (hip_pos_x,0), (hip_pos_x,h), color=(0, 0, 255))
     displayImg(img)
     
