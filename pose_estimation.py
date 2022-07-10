@@ -354,25 +354,27 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
     h, w = img.shape[:2]
 
     # コントラスト調整（二値化、エッジ強調のため)（閾値決定が重要）
-    alpha = 2.5 # コントラスト項目
+    alpha =4.5 # コントラスト項目       # 4.5   2.5  3.5
     img = cv2.convertScaleAbs(img,alpha = alpha)
-    displayImg(img)
+    # displayImg(img)
 
     # グレースケール化
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # ヒストグラム平坦化(エッジ強調のため) -> 強調されすぎてしまった
+    # img = cv2.equalizeHist(img)
+    # displayImg(img)
 
     # 二値化（閾値決定が重要）
     img = cv2.bilateralFilter(img,9,75,75)  # エッジ残しながらブラー
-    displayImg(img)
+    # displayImg(img)
 
     img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 11, 20)
     displayImg(img)
 
     # 線膨張（線をはっきりさせる） メディアンフィルタが効果的になる
     img = cv2.bitwise_not(img)
-    kernel = np.ones((3,3),np.uint8)
+    kernel = np.ones((3,3),np.uint8)        # (3,3)
     img = cv2.dilate(img,kernel,iterations = 1)
     img = cv2.bitwise_not(img)
     displayImg(img)
@@ -405,14 +407,18 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
             if np.all(img[y][x] <= 0):  
 
                 if not prev_x is None:
-                    print("prev_x - x:",prev_x-x)
+                    # print("prev_x - x:",prev_x-x)
                     if 0 <= x - prev_x < 5:  # 右上に伸びる連続性がある場合
                         length += 1
                     elif prev_x - x > 10:   # ノイズの場合
-                        print("noise")
+                        # print("noise")
                         continue
+                    elif length > 30:
+                        print("very long")
+                        end_flg = True
+                        break              
                     # 連続性が途絶え、かつ線分の長さがある程度長い場合、終了
-                    elif x - prev_x > 5 and length > 10: # 連続性が途絶えた場合
+                    elif x - prev_x > 5 and length > 15: # 連続性が途絶えた場合
                         end_flg = True
                         break
                     else:
@@ -420,7 +426,7 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
 
                 # print(x,y) 
                 # print("length:",length)
-                img[y][x] = [0,0,255]
+                # img[y][x] = [0,0,255]
                 # displayImg(img)  
 
                 hip_pos_xs.append(x)   # 各幅の最も左の黒いピクセルをhip_pos_xとする
@@ -440,32 +446,31 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
 
 
 def main(args):
-    inputs = [
-        "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
-        "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
-        "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
-        "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
-        "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
-        "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
-        "https://uma-furi.com/wp-content/uploads/2022/06/image.png",       
-        "https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
-        "https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
-        "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",     
-        "https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
-        "https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
-        "https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg" 
-    ]
-
     # inputs = [
-    #     "https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
-    #     "https://kyoto-tc.jp/images/club/2020/01/side.jpg",
-    #     "https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
-    #     "https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
-    #     "https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
-    #     "https://www-f.keibalab.jp/img/upload/focus/202005/200524_myrhapsody.jpg?1590281058",
-    #     "https://www-f.keibalab.jp/img/upload/focus/201705/170521_admirable02.jpg?1495355466",
-    #     "https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg", # 192 
+    #     "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
+    #     "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
+    #     "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
+    #     "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
+    #     "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
+    #     "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
+      
+    #     "https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
+    #     "https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
+    #     "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",     
+    #     "https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
+    #     "https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
+    #     "https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg" ,
+    #     "https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg",
+    #       "https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
+    #       "https://kyoto-tc.jp/images/club/2020/01/side.jpg",
+    #       "https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
+    # "https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
     # ]
+
+    inputs = [
+        "https://uma-furi.com/wp-content/uploads/2022/06/image.png", 
+        "https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
+    ]
 
     for i in inputs:
         print(i)
@@ -535,37 +540,3 @@ if __name__ == "__main__":
     ), "jpg format can't transparent"
 
     main(args)
-
-"""
-成功例
-    inputs = [
-        "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
-        "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
-        "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
-        "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
-        "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
-        "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
-        "https://uma-furi.com/wp-content/uploads/2022/06/image.png",       
-        "https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
-        "https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
-        "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",     
-        "https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
-        "https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
-        "https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg" 
-    ]
-
-"""
-
-"""
-失敗例
-    inputs = [
-        "https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
-        "https://kyoto-tc.jp/images/club/2020/01/side.jpg",
-        "https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
-        "https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
-        "https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
-        "https://www-f.keibalab.jp/img/upload/focus/202005/200524_myrhapsody.jpg?1590281058",
-        "https://www-f.keibalab.jp/img/upload/focus/201705/170521_admirable02.jpg?1495355466",
-        "https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg", # 192 
-    ]
-"""
