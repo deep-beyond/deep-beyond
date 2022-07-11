@@ -1,3 +1,4 @@
+from pydoc import describe
 import cv2
 import yaml
 import numpy as np
@@ -200,6 +201,9 @@ def getWithersPosition(contour_vertex, bbox_position, rawimg, descimg, args):
     # キ甲のX座標：前足の頂点らの中点
     wither_pos_x = sum(toes_pos_xs) // len(toes_pos_xs)
 
+    # 前足の頂点らの最も右端の点
+    last_toes_pos_x = max(toes_pos_xs)
+
     # キ甲のラインを描画
     if args.showinfo:
         drawLine(
@@ -232,11 +236,13 @@ def getWithersPosition(contour_vertex, bbox_position, rawimg, descimg, args):
     
     # キ甲の正確なラインを描画
     if args.display:
+        cv2.circle(descimg, tuple(wither_pos[0]), 5, (0, 0, 255), thickness=-1)
+        cv2.circle(descimg, tuple(wither_pos[1]), 5, (0, 0, 255), thickness=-1)
         drawLine(descimg,tuple(wither_pos[0]),tuple(wither_pos[1]),(0,0,255))
-        drawText(descimg, str(wither_pos[0]), wither_pos[0][0] + 20, wither_pos[0][1])
-        drawText(descimg, str(wither_pos[1]), wither_pos[1][0] + 20, wither_pos[1][1])
+        drawText(descimg, "x:{} y:{}".format(wither_pos[0][0],wither_pos[0][1]), wither_pos[0][0] + 20, wither_pos[0][1])
+        drawText(descimg, "x:{} y:{}".format(wither_pos[1][0],wither_pos[1][1]), wither_pos[1][0] + 20, wither_pos[1][1])
 
-    return wither_pos_x, wither_pos
+    return wither_pos_x, wither_pos, last_toes_pos_x
 
 
 def getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args):
@@ -320,13 +326,15 @@ def getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args):
         torso_front_pos = (wither_pos_x, int(descimg.shape[0]/2))
         torso_back_pos = (torso_pos_x, int(descimg.shape[0]/2))
         drawLine(descimg, torso_front_pos, torso_back_pos, color=(0, 0, 255))
+        cv2.circle(descimg, torso_front_pos, 5, (0, 0, 255), thickness=-1)
         cv2.circle(descimg, (torso_back_pos[0], torso_back_pos[1]), 5, (0, 0, 255), thickness=-1)
-        drawText(descimg, "x:"+str(torso_pos_x), torso_back_pos[0], torso_back_pos[1]-30)
+        drawText(descimg, "x:"+str(wither_pos_x), torso_front_pos[0], torso_front_pos[1]+30)
+        drawText(descimg, "x:"+str(torso_pos_x), torso_back_pos[0], torso_back_pos[1]+30)
 
     return torso_pos_x
 
 
-def getHip(torso_pos_x, descimg, bbox_position, img, args):
+def getHip(torso_pos_x, descimg, bbox_position, img):
     """
     尻の先端部の座標を探索
     :param torso_pos_x (type:int) 胴のx情報
@@ -363,101 +371,106 @@ def getHip(torso_pos_x, descimg, bbox_position, img, args):
         bold = 20
         ksize = 5
 
-    # 各コントラスト値で実行
-    for alpha in [1.5, 2.5, 4.5]:
-        """
-        前処理
-        """
-        # コントラスト調整
-        img = cv2.convertScaleAbs(base_img, alpha = alpha)
+    for itr in [1, 2, 3]:
+        # 各コントラスト値で実行
+        for alpha in [1.5, 2.5, 4.5]:
+            """
+            前処理
+            """
+            # コントラスト調整
+            img = cv2.convertScaleAbs(base_img, alpha = alpha)
 
-        # グレースケール化
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # グレースケール化
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # 輪郭抽出(尾の線を除去するために後々必要になる)
-        contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # 輪郭抽出(尾の線を除去するために後々必要になる)
+            contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        # 適応的閾値の二値化
-        img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 13, 20)
+            # 適応的閾値の二値化
+            img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 13, 20)
 
-        # 直線検出して画像をデフォルメ化(検出に必要な線を洗い出す: ハフ変換では不可能)
-        deform_img = np.zeros((img.shape[0], img.shape[1]),dtype=np.uint8)
-        for line in lsd(img):
-            x1, y1, x2, y2 = map(int,line[:4])
-            deform_img = cv2.line(deform_img, (x1,y1), (x2,y2), (255), 1)        
-        img = cv2.bitwise_not(deform_img)   # ネガポジ反転
+            # 直線検出して画像をデフォルメ化(検出に必要な線を洗い出す: ハフ変換では不可能)
+            deform_img = np.zeros((img.shape[0], img.shape[1]),dtype=np.uint8)
+            for line in lsd(img):
+                x1, y1, x2, y2 = map(int,line[:4])
+                deform_img = cv2.line(deform_img, (x1,y1), (x2,y2), (255), 1)        
+            img = cv2.bitwise_not(deform_img)   # ネガポジ反転
 
-        # 線膨張(線を強調)
-        img = cv2.bitwise_not(img)
-        kernel = np.ones((3,3),np.uint8)        
-        img = cv2.dilate(img,kernel,iterations = 1)
-        img = cv2.bitwise_not(img)
+            # 線膨張(線を強調)
+            img = cv2.bitwise_not(img)
+            kernel = np.ones((3,3),np.uint8)        
+            img = cv2.dilate(img,kernel,iterations = itr)
+            img = cv2.bitwise_not(img)
 
-        # 画像内の最も右下にある黒色ピクセルを探索
-        bottom_right_x_pos = 0
-        for x in range(w-1,0,-1):
-            if np.all(img[h-1][x] <=0):
-                bottom_right_x_pos = x
-                break
-
-        # 馬の尾から背中にかけての輪郭のみを残す
-        contour = np.array([],dtype=np.int32)
-        draw_flg = False
-        for cnt in contours[0]:            
-            x, y = cnt[0][0], cnt[0][1]
-            # 最も右下にある黒色ピクセルに近づいたら記録開始
-            if bottom_right_x_pos - x < 10: 
-                draw_flg = True
-            if draw_flg:
-                contour = np.append(contour, cnt)
-        contour = contour.reshape([-1,1,2])
-
-        # 馬の尾から背中にかけての輪郭を白色にする(線を除去)
-        for i in range(len(contour)-1):
-            x1, y1 = contour[i][0][0], contour[i][0][1]
-            x2, y2 = contour[i+1][0][0], contour[i+1][0][1]
-            drawLine(img , (x1, y1), (x2, y2), color=(255), bold=bold)
-
-        # ノイズ除去
-        for _ in range(4):
-            img = cv2.medianBlur(img, ksize=ksize)
-
-        """
-        尻の先端のx座標を探索
-        """
-        cand_pos_xs = [] # 候補となるx座標を記録
-        prev_x = None   # 時刻t-1におけるx座標
-        end_flg = False
-        length = 0  # 線分の長さ(ノイズ対策)
-
-        # 一番下から半分までの高さを探索
-        for y in range(h-1,int(h/2),-1):    
-            if end_flg:
-                break
-            # 右から10pxは尻の先端ではないと仮定し省略
-            for x in range(w-10):
-                if np.all(img[y][x] <= 0):  # 画素が黒の場合
-                    if not prev_x is None:
-                        if 0 <= x-prev_x < 5:  # 右上に伸びる連続性がある場合
-                            length += 1
-                        elif prev_x - x > 10:   # ノイズの場合
-                            continue
-                        elif length > 50: # 長さがある程度長ければ終了
-                            end_flg = True
-                            break              
-                        else:
-                            length = 0  # 連続性なしと判断
-
-                    if length > 10:
-                        cand_pos_xs.append(x)
-                    prev_x = x  # 時刻tのx座標を時刻t-1のx座標として記録
+            # 画像内の最も右下にある黒色ピクセルを探索
+            bottom_right_x_pos = 0
+            for x in range(w-1,0,-1):
+                if np.all(img[h-1][x] <=0):
+                    bottom_right_x_pos = x
                     break
-        
-        # 候補となる複数のx座標の最大値を尻の先端部とする
-        if cand_pos_xs:
-            hip_pos_log.append(max(cand_pos_xs))
+
+            # 馬の尾から背中にかけての輪郭のみを残す
+            contour = np.array([],dtype=np.int32)
+            draw_flg = False
+            for cnt in contours[0]:            
+                x, y = cnt[0][0], cnt[0][1]
+                # 最も右下にある黒色ピクセルに近づいたら記録開始
+                if bottom_right_x_pos - x < 10: 
+                    draw_flg = True
+                if draw_flg:
+                    contour = np.append(contour, cnt)
+            contour = contour.reshape([-1,1,2])
+
+            # 馬の尾から背中にかけての輪郭を白色にする(線を除去)
+            for i in range(len(contour)-1):
+                x1, y1 = contour[i][0][0], contour[i][0][1]
+                x2, y2 = contour[i+1][0][0], contour[i+1][0][1]
+                drawLine(img , (x1, y1), (x2, y2), color=(255), bold=bold)
+
+            # ノイズ除去
+            for _ in range(4):
+                img = cv2.medianBlur(img, ksize=ksize)
+
+            """
+            尻の先端のx座標を探索
+            """
+            cand_pos_xs = [] # 候補となるx座標を記録
+            prev_x = None   # 時刻t-1におけるx座標
+            end_flg = False
+            length = 0  # 線分の長さ(ノイズ対策)
+
+            # 一番下から半分までの高さを探索
+            for y in range(h-1,int(h/2),-1):    
+                if end_flg:
+                    break
+                # 右から10pxは尻の先端ではないと仮定し省略
+                for x in range(w-10):
+                    if np.all(img[y][x] <= 0):  # 画素が黒の場合
+                        if not prev_x is None:
+                            if 0 <= x-prev_x < 5:  # 右上に伸びる連続性がある場合
+                                length += 1
+                            elif prev_x - x > 10:   # ノイズの場合
+                                continue
+                            elif length > 50: # 長さがある程度長ければ終了
+                                end_flg = True
+                                break              
+                            else:
+                                length = 0  # 連続性なしと判断
+
+                        if length > 10:
+                            cand_pos_xs.append(x)
+                        prev_x = x  # 時刻tのx座標を時刻t-1のx座標として記録
+                        break
+            
+            # 候補となる複数のx座標の最大値を尻の先端部とする
+            if cand_pos_xs:
+                hip_pos_log.append(max(cand_pos_xs))
+            else:
+                print("候補なし")
         else:
-            print("候補なし")
+            # もし記録リストが空でなければ終了、空ならば線膨張の線の太さを変更
+            if not hip_pos_log == []:
+                break
 
     # 記録の中で最も右側にある候補x座標を尻の先端のx座標とする
     hip_pos_x = max(hip_pos_log)
@@ -465,11 +478,76 @@ def getHip(torso_pos_x, descimg, bbox_position, img, args):
     # グローバル座標に変換
     hip_pos_x += torso_pos_x
 
-    if args.showinfo:
-        drawLine(descimg, (hip_pos_x,descimg.shape[0]), (hip_pos_x,0), color=(0, 0, 255))
-        displayImg(descimg)
+    drawLine(descimg, (hip_pos_x,descimg.shape[0]), (hip_pos_x,0), color=(0, 0, 255)) # デバッグ用
 
     return hip_pos_x
+
+
+def getHindlimb(hip_pos_x, contour_vertex, last_tpes_pos_x, descimg, args):
+    """
+    ともを探索
+    :param hip_pos_x (type:int) 尻の先端のx座標
+    :param contour_vertex (type:list) 頂点10以上の近似輪郭の座標リスト
+    :param descimg (type:numpy.ndarray) 説明する画像(テキストや直線の描画などに使用)
+    :return hindlimb_pos_x (type:int) ともの始点のx座標
+    """
+
+    """
+    1. ともの始点を探索
+    """
+    # 頂点数制限(7頂点までを見る)
+    limit_cnt = 0
+
+    # ともの始点の座標
+    hindlimb_pos_x = 0
+    hindlimb_pos_y = float('inf')
+
+    # -1 にしないとfor文最後の実行において終点で配列外参照になる
+    for i in range(len(contour_vertex) - 1):
+        x1, y1 = contour_vertex[i]  # 始点
+
+        # 始点が外接矩形の左半分ならばスキップ
+        if x1 < last_tpes_pos_x:
+            continue
+
+        # 条件を満たす7頂点を見れば処理終了
+        if limit_cnt > 7:
+            break
+
+        limit_cnt += 1
+        # 条件を満たす7点の中でy座標が最小の点がともの始点
+        if y1 < hindlimb_pos_y:
+            hindlimb_pos_y = y1
+            hindlimb_pos_x = x1
+
+    if args.display:
+        drawText(descimg, "x:"+str(hindlimb_pos_x), hindlimb_pos_x, hindlimb_pos_y-30)
+        drawText(descimg, "x:"+str(hip_pos_x), hip_pos_x, hindlimb_pos_y-30)
+        cv2.circle(descimg, (hindlimb_pos_x, hindlimb_pos_y), 5, (0, 0, 255), thickness=-1)
+        cv2.circle(descimg, (hip_pos_x, hindlimb_pos_y), 5, (0, 0, 255), thickness=-1)
+        drawLine(descimg, (hindlimb_pos_x, hindlimb_pos_y), (hip_pos_x, hindlimb_pos_y), (0, 0, 255))
+
+    return hindlimb_pos_x
+
+
+def getNeck(contour_vertex, wither_pos, descimg, args):
+    """
+    首を探索
+    :param contour_vertex (type:list) 頂点10以上の近似輪郭の座標リスト
+    :param wither_pos (type:list) キ甲を形成する2点の座標
+    :param descimg (type:numpy.ndarray) 説明する画像(テキストや直線の描画などに使用)
+    """
+    x1, y1 = contour_vertex[0]  # 始点
+    x2, y2 = wither_pos[0]   # 終点
+    necklength = np.sqrt(abs(x2-x1)**2 + abs(y2-y1)**2)
+    necklength = round(necklength,1)
+
+    if args.display:
+        drawLine(descimg,(x1,y1),(x2,y2),(0,0,255))
+        drawText(descimg, "x:"+str(x1), x1, y1)
+        cv2.circle(descimg, (x1, y1), 5, (0, 0, 255), thickness=-1)
+    
+    return necklength
 
 
 def main(args):
@@ -502,7 +580,7 @@ def main(args):
             cv2.drawContours(descimg, contours, -1, (255, 255, 0), 3)  # 輪郭描画
 
         # キ甲を探索
-        wither_pos_x, wither_pos = getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
+        wither_pos_x, wither_pos, last_toes_pos_x = getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
         print("キ甲の長さ:",wither_pos[1][1] - wither_pos[0][1])
 
         # 胴を探索
@@ -510,13 +588,18 @@ def main(args):
         print("胴の長さ:", torso_pos_x - wither_pos[0][0])
 
         # 尻のx座標を探索
-        hip_pos_x = getHip(torso_pos_x, descimg, bbox_position, deepcopy(resultimg), args)
+        hip_pos_x = getHip(torso_pos_x, descimg, bbox_position, deepcopy(resultimg))
 
         # ともを探索
-        pass
+        hindlimb_pos_x = getHindlimb(hip_pos_x, contour_vertex, last_toes_pos_x, descimg, args)
+        print("ともの長さ:",hip_pos_x - hindlimb_pos_x)
 
-    if args.display:
-        displayImg(cv2.hconcat([resultimg, descimg]))  # 画像を表示
+        # 首を探索
+        necklength = getNeck(contour_vertex, wither_pos, descimg, args)
+        print("首の長さ:",necklength)
+
+        if args.display:
+            displayImg(cv2.hconcat([resultimg, descimg]))  # 画像を表示
 
 
 if __name__ == "__main__":

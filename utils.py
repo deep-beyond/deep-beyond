@@ -2,7 +2,7 @@ import cv2
 import urllib
 
 
-def loadImg(mode,img_url,img_path):
+def loadImg(mode,img_url="",img_path=""):
     """
     画像を読み込む
     :param mode (type:string) "net" or "local" ネット上にある画像orローカルファイル を読み込み
