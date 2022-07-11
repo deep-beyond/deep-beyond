@@ -1,4 +1,5 @@
 import cv2
+import yaml
 import numpy as np
 import argparse
 from copy import deepcopy
@@ -8,7 +9,7 @@ from pylsd.lsd import lsd
 from deep import DeepSegmentation
 
 # utils.pyの関数
-from utils import loadImg, drawText, drawLine, displayImg
+from utils import loadImg, drawText, drawLine, displayImg, update_values
 
 def getContourVertex(contours, img, args):
     """
@@ -320,15 +321,19 @@ def getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args):
         torso_back_pos = (torso_pos_x, int(descimg.shape[0]/2))
         drawLine(descimg, torso_front_pos, torso_back_pos, color=(0, 0, 255))
         cv2.circle(descimg, (torso_back_pos[0], torso_back_pos[1]), 5, (0, 0, 255), thickness=-1)
-        # drawText(descimg, "x:"+str(torso_pos_x), torso_back_pos[0], torso_back_pos[1]-30)
+        drawText(descimg, "x:"+str(torso_pos_x), torso_back_pos[0], torso_back_pos[1]-30)
 
     return torso_pos_x
 
 
-def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
+def getHip(torso_pos_x, descimg, bbox_position, img, args):
     """
-    ともを探索
-    :param
+    尻の先端部の座標を探索
+    :param torso_pos_x (type:int) 胴のx情報
+    :param bbox_position (type:tuple) 外接矩形座標(x,y,h,w)
+    :param descimg (type:numpy.ndarray) 説明用画像
+    :param img (type:numpy.ndarray) 生の画像
+    :return hip_pos_x (type:int) 尻の先端部のx座標
     """
 
     """
@@ -340,180 +345,147 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
     bbox_w = bbox_position[3]
 
     # 画像の尻部分のみ着目
-    img = img[bbox_y : bbox_y+int(bbox_h/2), torso_pos_x: bbox_x+bbox_w]
-    display_img = img
-    h, w = img.shape[:2]
+    base_img = img[bbox_y : bbox_y+int(bbox_h/2), torso_pos_x: bbox_x+bbox_w]
+    h, w = base_img.shape[:2]
 
-    originimg = img
+    """
+    2. 尻の先端のx座標を探索
+    """
+
+    # 尻の先端のx座標を記録
     hip_pos_log = []
 
+    # 画像の大きさによって線の太さやノイズ除去の度合を変更
+    if img.shape[1] < 150:
+        bold = 15   # 線の太さ
+        ksize = 3   # ノイズ除去の度合
+    else:
+        bold = 20
+        ksize = 5
+
+    # 各コントラスト値で実行
     for alpha in [1.5, 2.5, 4.5]:
-        # コントラスト調整（二値化、エッジ強調のため)（閾値決定が重要）
-        img = cv2.convertScaleAbs(originimg, alpha = alpha) # 4.5
-        # displayImg(img)
+        """
+        前処理
+        """
+        # コントラスト調整
+        img = cv2.convertScaleAbs(base_img, alpha = alpha)
 
         # グレースケール化
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # 輪郭抽出(尾の線を除去するために後々必要になる)
         contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        # 二値化（閾値決定が重要）
-        # img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY, 11, 20)
-        img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 11, 20)
-        # displayImg(img)
+        # 適応的閾値の二値化
+        img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 13, 20)
 
-        # 直線検出
-        mask = np.zeros((img.shape[0], img.shape[1]),dtype=np.uint8)
-        linesL = lsd(img)
-        for line in linesL:
+        # 直線検出して画像をデフォルメ化(検出に必要な線を洗い出す: ハフ変換では不可能)
+        deform_img = np.zeros((img.shape[0], img.shape[1]),dtype=np.uint8)
+        for line in lsd(img):
             x1, y1, x2, y2 = map(int,line[:4])
-            mask = cv2.line(mask, (x1,y1), (x2,y2), (255), 1)
+            deform_img = cv2.line(deform_img, (x1,y1), (x2,y2), (255), 1)        
+        img = cv2.bitwise_not(deform_img)   # ネガポジ反転
 
-        # ネガポジ反転
-        img = cv2.bitwise_not(mask)
-
-        # 線膨張
+        # 線膨張(線を強調)
         img = cv2.bitwise_not(img)
-        kernel = np.ones((3,3),np.uint8)        # (3,3)
-        img = cv2.dilate(img,kernel,iterations = 1) # 1
+        kernel = np.ones((3,3),np.uint8)        
+        img = cv2.dilate(img,kernel,iterations = 1)
         img = cv2.bitwise_not(img)
-        # displayImg(img)
 
-        # 画像中、最も右下にある黒色ピクセルを探索
-        right_x =0
+        # 画像内の最も右下にある黒色ピクセルを探索
+        bottom_right_x_pos = 0
         for x in range(w-1,0,-1):
             if np.all(img[h-1][x] <=0):
-                right_x = x
+                bottom_right_x_pos = x
                 break
 
-        # 画像の枠を入れない輪郭を生成
+        # 馬の尾から背中にかけての輪郭のみを残す
         contour = np.array([],dtype=np.int32)
         draw_flg = False
         for cnt in contours[0]:            
-            x,y = cnt[0][0],cnt[0][1]
-            if right_x - x < 10:    # 5
+            x, y = cnt[0][0], cnt[0][1]
+            # 最も右下にある黒色ピクセルに近づいたら記録開始
+            if bottom_right_x_pos - x < 10: 
                 draw_flg = True
             if draw_flg:
                 contour = np.append(contour, cnt)
         contour = contour.reshape([-1,1,2])
 
-        # 馬の輪郭を白色にする
-        if img.shape[1] < 150:
-            bold = 15
-            ksize = 3
-        else:
-            bold = 20   # 20
-            ksize = 5
-
-        print("bold:",bold)
+        # 馬の尾から背中にかけての輪郭を白色にする(線を除去)
         for i in range(len(contour)-1):
             x1, y1 = contour[i][0][0], contour[i][0][1]
             x2, y2 = contour[i+1][0][0], contour[i+1][0][1]
-            drawLine(img , (x1, y1), (x2, y2), color=(255),bold=bold)
-        # displayImg(img)
+            drawLine(img , (x1, y1), (x2, y2), color=(255), bold=bold)
 
         # ノイズ除去
-        for _ in range(4):  # 3
+        for _ in range(4):
             img = cv2.medianBlur(img, ksize=ksize)
-        # displayImg(img)
 
         """
-        2. 尻の先端部のx座標を探索
+        尻の先端のx座標を探索
         """
-
-        hip_pos_xs = [] # 候補となるx座標を記録
-        prev_x = None   # 前回施行のx座標
+        cand_pos_xs = [] # 候補となるx座標を記録
+        prev_x = None   # 時刻t-1におけるx座標
         end_flg = False
         length = 0  # 線分の長さ(ノイズ対策)
 
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        
         # 一番下から半分までの高さを探索
         for y in range(h-1,int(h/2),-1):    
             if end_flg:
                 break
             # 右から10pxは尻の先端ではないと仮定し省略
             for x in range(w-10):
-                # 画素が黒の場合
-                if np.all(img[y][x] <= 0):  
+                if np.all(img[y][x] <= 0):  # 画素が黒の場合
                     if not prev_x is None:
-                        # print("prev_x - x:",prev_x-x)
-                        if 0 <= x - prev_x < 5:  # 右上に伸びる連続性がある場合
+                        if 0 <= x-prev_x < 5:  # 右上に伸びる連続性がある場合
                             length += 1
                         elif prev_x - x > 10:   # ノイズの場合
-                            # print("noise")
                             continue
-                        elif length > 50:   # 30
-                            print("very long")
+                        elif length > 50: # 長さがある程度長ければ終了
                             end_flg = True
                             break              
                         else:
-                            length = 0
+                            length = 0  # 連続性なしと判断
 
-                    # print(x,y) 
-                    # print("length:",length)
-                    if length > 5:
-                        img[y][x] = [0,0,255]
-                        hip_pos_xs.append(x)   # 各幅の最も左の黒いピクセルをhip_pos_xとする
-                    # displayImg(img)
-                    
-                    prev_x = x  # 前回のx座標を記録
+                    if length > 10:
+                        cand_pos_xs.append(x)
+                    prev_x = x  # 時刻tのx座標を時刻t-1のx座標として記録
                     break
-        if hip_pos_xs:
-            hip_pos_x = max(hip_pos_xs) # 候補となる複数のx座標の最大値を尻の先端部とする
-            drawLine(img , (hip_pos_x,0), (hip_pos_x,h), color=(0, 0, 255))
-            # displayImg(img)
-            hip_pos_log.append(hip_pos_x)
+        
+        # 候補となる複数のx座標の最大値を尻の先端部とする
+        if cand_pos_xs:
+            hip_pos_log.append(max(cand_pos_xs))
         else:
             print("候補なし")
 
+    # 記録の中で最も右側にある候補x座標を尻の先端のx座標とする
     hip_pos_x = max(hip_pos_log)
-    drawLine(display_img , (hip_pos_x,0), (hip_pos_x,h), color=(0, 0, 255))
-    displayImg(display_img.repeat(2, axis=0).repeat(2, axis=1))
-    
+
     # グローバル座標に変換
     hip_pos_x += torso_pos_x
-    drawLine(descimg, (hip_pos_x,descimg.shape[0]), (hip_pos_x,0), color=(0, 0, 255))
-    # displayImg(descimg)
+
+    if args.showinfo:
+        drawLine(descimg, (hip_pos_x,descimg.shape[0]), (hip_pos_x,0), color=(0, 0, 255))
+        displayImg(descimg)
+
+    return hip_pos_x
 
 
 def main(args):
-    inputs = [
-        "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",   
-        "https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
+    if args.mode == 'net':
+        inputs = args.img_url
+    else:
+        inputs = args.img_path
+    
+    for name in inputs:
+        print(name)
 
-        "https://umatokuimg.hochi.co.jp/horseimages/2020/2020102796/2020102796_1.jpg",
-
-        "https://tospo-keiba.jp/images/articles/contents/shares/0002022/05/0511/%E3%82%A4%E3%83%AA%E3%82%B9%E3%83%AC%E3%83%BC%E3%83%B3.jpg",
-        "https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg",
-        "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
-        "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
-        "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
-        "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
-        "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
-        "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
-        "https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
-        "https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
-        "https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
-        "https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
-        "https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg" ,
-        "https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
-        "https://kyoto-tc.jp/images/club/2020/01/side.jpg",
-        "https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
-        "https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
-        "https://uma-furi.com/wp-content/uploads/2022/06/image.png", 
-        "https://cdn-ak.f.st-hatena.com/images/fotolife/y/ymhope/20210309/20210309200653.jpg",
-        "https://stat.ameba.jp/user_images/20220201/23/keika00/3f/19/j/o0800053315069363478.jpg?caw=800",
-        "https://pbs.twimg.com/media/FNcuyfnaQAAUPjj.jpg",
-        "https://cdn-ak.f.st-hatena.com/images/fotolife/r/redfray/20200722/20200722191555.jpg",
-        "https://blog-imgs-51.fc2.com/u/m/a/uma1kuti/11007.jpg",
-        "https://blogimg.goo.ne.jp/user_image/72/ff/2f9ab72d51b7851ae7a30a9b3e4e85aa.jpg",
-    ]
-
-    for i in inputs:
-        print(i)
         # 画像読み込み
-        # img = loadImg(mode=args.mode, img_url=args.img_url, img_path=args.img_path)
-        img = loadImg(mode=args.mode, img_url=i,  img_path=args.img_path)
+        if args.mode == 'net':
+            img = loadImg(mode=args.mode, img_url=name)
+        else:
+            img = loadImg(mode=args.mode, img_path=name)
 
         # インスタンス生成(クラスの__init__メソッドを実行)
         ds = DeepSegmentation(img, args.color_path, args.transparent)
@@ -537,9 +509,11 @@ def main(args):
         torso_pos_x = getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args)
         print("胴の長さ:", torso_pos_x - wither_pos[0][0])
 
-        # ともを探索
-        getHindlimb(torso_pos_x, descimg, bbox_position, deepcopy(resultimg), args)
+        # 尻のx座標を探索
+        hip_pos_x = getHip(torso_pos_x, descimg, bbox_position, deepcopy(resultimg), args)
 
+        # ともを探索
+        pass
 
     if args.display:
         displayImg(cv2.hconcat([resultimg, descimg]))  # 画像を表示
@@ -552,8 +526,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--img_url",
-        type=str,
-        default="https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
+        nargs='+',
+        default="[https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg]",
         help="入力画像URL",
     )
     parser.add_argument(
@@ -575,49 +549,9 @@ if __name__ == "__main__":
         args.transparent and args.save_format == "png"
     ), "jpg format can't transparent"
 
+    # ymlファイルに記述された引数で更新
+    with open("./input.yml", 'r') as handle:
+        options_yaml = yaml.load(handle, Loader=yaml.SafeLoader)
+    update_values(options_yaml, vars(args))
+
     main(args)
-
-
-
-"""
-失敗例
-inputs = [
-    "https://blog-imgs-51.fc2.com/u/m/a/uma1kuti/11007.jpg",
-    "https://tospo-keiba.jp/images/articles/contents/shares/0002022/05/0511/%E3%82%A4%E3%83%AA%E3%82%B9%E3%83%AC%E3%83%BC%E3%83%B3.jpg",
-    "https://pbs.twimg.com/media/FNcuyfnaQAAUPjj.jpg",
-    "https://cdn-ak.f.st-hatena.com/images/fotolife/y/ymhope/20210309/20210309200653.jpg",
-    "https://stat.ameba.jp/user_images/20220201/23/keika00/3f/19/j/o0800053315069363478.jpg?caw=800",
-    "https://blogimg.goo.ne.jp/user_image/72/ff/2f9ab72d51b7851ae7a30a9b3e4e85aa.jpg",
-    "https://umatokuimg.hochi.co.jp/horseimages/2020/2020102796/2020102796_1.jpg",
-    "https://cdn-ak.f.st-hatena.com/images/fotolife/r/redfray/20200722/20200722191555.jpg",
-]
-
-"""
-
-"""
-成功例
-inputs = [
-    "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
-    "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
-    "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
-    "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
-    "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
-    "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
-    "https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
-    "https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
-    "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",   
-    "https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
-    "https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
-    "https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg" ,
-    "https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg",
-    "https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
-    "https://kyoto-tc.jp/images/club/2020/01/side.jpg",
-    "https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
-    "https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
-    "https://uma-furi.com/wp-content/uploads/2022/06/image.png", 
-    "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",
-    "https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
-]
-"""
-
-

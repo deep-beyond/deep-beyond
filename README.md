@@ -22,7 +22,7 @@
 
 ## 仮想環境
 ```
-conda env create --file env.yaml
+conda env create --file env.yml
 ```
 - python:3.8.13
 - pytorch:1.11.0

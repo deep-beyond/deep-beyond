@@ -82,3 +82,17 @@ def displayImg(img):
     cv2.imshow("display image", img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+def update_values(dict_from, dict_to):
+    """
+    引数をymlファイルの内容に更新
+    :param dict_from (type:dict) ymlファイルに記述された新規引数
+    :param dict_to (type:dict) 更新される側の引数
+    ref: https://github.com/salesforce/densecap/blob/5d08369ffdcb7db946ae11a8e9c8a056e47d28c2/data/utils.py#L85
+    """
+    for key, value in dict_from.items():
+        if isinstance(value, dict):
+            update_values(dict_from[key], dict_to[key])
+        elif value is not None:
+            dict_to[key] = dict_from[key]
