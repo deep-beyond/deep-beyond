@@ -55,20 +55,21 @@ def drawText(img, text, x, y, scale=0.6, edgecolor=(0,255,0), color=(0,0,0)):
     )
 
 
-def drawLine(img, start_point, end_point, color=(255,255,255)):
+def drawLine(img, start_point, end_point, color=(255,255,255), bold=2):
     """
     画像に線を描画
     :param img (type:numpy.ndarray) 画像情報
     :param start_point (type:tuple) 始点(x座標,y座標)
     :param end_point (type:tuple) 終点(x座標,y座標)
     :param color (type:tuple) 線の色
+    :param bold (type:int) 線ｎ太さ
     """
     cv2.line(
         img,
         start_point,
         end_point,
         color,
-        thickness=2,
+        thickness=bold,
         lineType=cv2.LINE_AA,
     )
 

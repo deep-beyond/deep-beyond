@@ -2,13 +2,13 @@ import cv2
 import numpy as np
 import argparse
 from copy import deepcopy
+from pylsd.lsd import lsd
 
 # deep.pyのDeepSementationクラス
 from deep import DeepSegmentation
 
 # utils.pyの関数
 from utils import loadImg, drawText, drawLine, displayImg
-
 
 def getContourVertex(contours, img, args):
     """
@@ -173,6 +173,9 @@ def getWithersPosition(contour_vertex, bbox_position, rawimg, descimg, args):
 
         distance_x = x2 - x1
         distance_y = y2 - y1
+        # 0除算対策
+        if distance_x == 0:
+            distance_x += 0.00001
         tilt = round(distance_y / distance_x, 1)
 
         if args.showinfo:
@@ -341,117 +344,129 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
     display_img = img
     h, w = img.shape[:2]
 
-    # コントラスト調整（二値化、エッジ強調のため)（閾値決定が重要）
-    img = cv2.convertScaleAbs(img, alpha = 4.5)
-    # displayImg(img)
+    originimg = img
+    hip_pos_log = []
 
-    # グレースケール化
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for alpha in [1.5, 2.5, 4.5]:
+        # コントラスト調整（二値化、エッジ強調のため)（閾値決定が重要）
+        img = cv2.convertScaleAbs(originimg, alpha = alpha) # 4.5
+        # displayImg(img)
 
-    # ヒストグラム平坦化(エッジ強調のため) -> 強調されすぎてしまった
-    # img = cv2.equalizeHist(img)
-    # displayImg(img)
+        # グレースケール化
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # 二値化（閾値決定が重要）
-    img = cv2.bilateralFilter(img,9,75,75)  # エッジ残しながらブラー
-    # displayImg(img)
+        # 二値化（閾値決定が重要）
+        # img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY, 11, 20)
+        img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 11, 20)
+        # displayImg(img)
 
-    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY, 11, 20)
-    # displayImg(img)
+        # 直線検出
+        mask = np.zeros((img.shape[0], img.shape[1]),dtype=np.uint8)
+        linesL = lsd(img)
+        for line in linesL:
+            x1, y1, x2, y2 = map(int,line[:4])
+            mask = cv2.line(mask, (x1,y1), (x2,y2), (255), 1)
 
-    # 線膨張（線をはっきりさせる） メディアンフィルタが効果的になる
-    img = cv2.bitwise_not(img)
-    kernel = np.ones((3,3),np.uint8)        # (3,3)
-    img = cv2.dilate(img,kernel,iterations = 1)
-    img = cv2.bitwise_not(img)
-    # displayImg(img)
+        # ネガポジ反転
+        img = cv2.bitwise_not(mask)
 
-    # 画像中、最も右下にある黒色ピクセルを探索
-    right_x =0
-    for x in range(w-1,0,-1):
-        if np.all(img[h-1][x] <=0):
-            right_x = x
-            break
+        # 線膨張
+        img = cv2.bitwise_not(img)
+        kernel = np.ones((3,3),np.uint8)        # (3,3)
+        img = cv2.dilate(img,kernel,iterations = 1) # 1
+        img = cv2.bitwise_not(img)
+        # displayImg(img)
 
-    # 画像の枠を入れない輪郭を生成
-    # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    contour = np.array([],dtype=np.int32)
-    draw_flg = False
-    for cnt in contours[0]:
-        x,y = cnt[0][0],cnt[0][1]
-        # print(x,y)
-        if right_x - x < 5:
-            draw_flg = True
-
-        if draw_flg:
-            contour = np.append(contour, cnt)
-            # cv2.circle(img, (x, y), 5, (255, 0, 255), thickness=-1)
-            # displayImg(img)
-    contour = contour.reshape([-1,1,2])
-
-    # 馬の輪郭を白色にする
-    img= cv2.drawContours(img, contour, -1, (255,255,255), 7)
-    # displayImg(img)
-
-    # メディアンフィルタ
-    img = cv2.medianBlur(img, ksize=5)  # ksize >= 7 の場合情報が欠落してしまう
-    # displayImg(img)
-    for _ in range(3):
-        img = cv2.medianBlur(img, ksize=3)
-    # displayImg(img)
-
-    # BGR化(探索場所を明瞭に赤色にするため)
-    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    # displayImg(img)
-
-    """
-    2. 尻の先端部のx座標を探索
-    """
-
-    hip_pos_xs = [] # 候補となるx座標を記録
-    prev_x = None   # 前回施行のx座標
-    end_flg = False
-    length = 0  # 線分の長さ(ノイズ対策)
-    
-    # 一番下から半分までの高さを探索
-    for y in range(h-1,int(h/2),-1):    
-        if end_flg:
-            break
-        # 右から10pxは尻の先端ではないと仮定し省略
-        for x in range(w-10):
-            # 画素が黒の場合
-            if np.all(img[y][x] <= 0):  
-                if not prev_x is None:
-                    # print("prev_x - x:",prev_x-x)
-                    if 0 <= x - prev_x < 5:  # 右上に伸びる連続性がある場合
-                        length += 1
-                    elif prev_x - x > 10:   # ノイズの場合
-                        # print("noise")
-                        continue
-                    elif length > 30:
-                        print("very long")
-                        end_flg = True
-                        break              
-                    # 連続性が途絶え、かつ線分の長さがある程度長い場合、終了
-                    elif x - prev_x > 5 and length > 15: # 連続性が途絶えた場合
-                        end_flg = True
-                        break
-                    else:
-                        length = 0
-
-                # print(x,y) 
-                # print("length:",length)
-                if length > 5:
-                    # img[y][x] = [0,0,255]
-                    hip_pos_xs.append(x)   # 各幅の最も左の黒いピクセルをhip_pos_xとする
-                # displayImg(img)
-                
-                prev_x = x  # 前回のx座標を記録
+        # 画像中、最も右下にある黒色ピクセルを探索
+        right_x =0
+        for x in range(w-1,0,-1):
+            if np.all(img[h-1][x] <=0):
+                right_x = x
                 break
 
-    hip_pos_x = max(hip_pos_xs) # 候補となる複数のx座標の最大値を尻の先端部とする
+        # 画像の枠を入れない輪郭を生成
+        contour = np.array([],dtype=np.int32)
+        draw_flg = False
+        for cnt in contours[0]:            
+            x,y = cnt[0][0],cnt[0][1]
+            if right_x - x < 10:    # 5
+                draw_flg = True
+            if draw_flg:
+                contour = np.append(contour, cnt)
+        contour = contour.reshape([-1,1,2])
 
+        # 馬の輪郭を白色にする
+        if img.shape[1] < 150:
+            bold = 15
+            ksize = 3
+        else:
+            bold = 20   # 20
+            ksize = 5
+
+        print("bold:",bold)
+        for i in range(len(contour)-1):
+            x1, y1 = contour[i][0][0], contour[i][0][1]
+            x2, y2 = contour[i+1][0][0], contour[i+1][0][1]
+            drawLine(img , (x1, y1), (x2, y2), color=(255),bold=bold)
+        # displayImg(img)
+
+        # ノイズ除去
+        for _ in range(4):  # 3
+            img = cv2.medianBlur(img, ksize=ksize)
+        # displayImg(img)
+
+        """
+        2. 尻の先端部のx座標を探索
+        """
+
+        hip_pos_xs = [] # 候補となるx座標を記録
+        prev_x = None   # 前回施行のx座標
+        end_flg = False
+        length = 0  # 線分の長さ(ノイズ対策)
+
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        
+        # 一番下から半分までの高さを探索
+        for y in range(h-1,int(h/2),-1):    
+            if end_flg:
+                break
+            # 右から10pxは尻の先端ではないと仮定し省略
+            for x in range(w-10):
+                # 画素が黒の場合
+                if np.all(img[y][x] <= 0):  
+                    if not prev_x is None:
+                        # print("prev_x - x:",prev_x-x)
+                        if 0 <= x - prev_x < 5:  # 右上に伸びる連続性がある場合
+                            length += 1
+                        elif prev_x - x > 10:   # ノイズの場合
+                            # print("noise")
+                            continue
+                        elif length > 50:   # 30
+                            print("very long")
+                            end_flg = True
+                            break              
+                        else:
+                            length = 0
+
+                    # print(x,y) 
+                    # print("length:",length)
+                    if length > 5:
+                        img[y][x] = [0,0,255]
+                        hip_pos_xs.append(x)   # 各幅の最も左の黒いピクセルをhip_pos_xとする
+                    # displayImg(img)
+                    
+                    prev_x = x  # 前回のx座標を記録
+                    break
+        if hip_pos_xs:
+            hip_pos_x = max(hip_pos_xs) # 候補となる複数のx座標の最大値を尻の先端部とする
+            drawLine(img , (hip_pos_x,0), (hip_pos_x,h), color=(0, 0, 255))
+            # displayImg(img)
+            hip_pos_log.append(hip_pos_x)
+        else:
+            print("候補なし")
+
+    hip_pos_x = max(hip_pos_log)
     drawLine(display_img , (hip_pos_x,0), (hip_pos_x,h), color=(0, 0, 255))
     displayImg(display_img.repeat(2, axis=0).repeat(2, axis=1))
     
@@ -462,38 +477,72 @@ def getHindlimb(torso_pos_x, descimg, bbox_position, img, args):
 
 
 def main(args):
-    # 画像読み込み
-    img = loadImg(mode=args.mode, img_url=args.img_url, img_path=args.img_path)
-    # img = loadImg(mode=args.mode, img_url=i,  img_path=args.img_path)
+    inputs = [
+        "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",   
+        "https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
 
-    # インスタンス生成(クラスの__init__メソッドを実行)
-    ds = DeepSegmentation(img, args.color_path, args.transparent)
-    # クラスの__call__メソッドを実行
-    resultimg, contours = ds()  # resultimg shape=(H,W,C,A)
+        "https://umatokuimg.hochi.co.jp/horseimages/2020/2020102796/2020102796_1.jpg",
 
-    # 説明するための画像(範囲のラインや座標値テキストの描画などに使用)
-    descimg = deepcopy(resultimg)
+        "https://tospo-keiba.jp/images/articles/contents/shares/0002022/05/0511/%E3%82%A4%E3%83%AA%E3%82%B9%E3%83%AC%E3%83%BC%E3%83%B3.jpg",
+        "https://i.daily.jp/horse/horsecheck/2018/02/13/Images/d_10982189.jpg",
+        "https://cdn.netkeiba.com/img.news/?pid=news_img&id=459925",
+        "https://blogimg.goo.ne.jp/user_image/5f/cb/121f584bd5a6b7ba9a285575879d1713.jpg",
+        "https://blogimg.goo.ne.jp/user_image/22/0e/ff0d77f61ca14179ddffd3519cf76f2d.jpg",
+        "https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg",
+        "https://prtimes.jp/i/21266/9/resize/d21266-9-377533-0.jpg",
+        "https://uma-furi.com/wp-content/uploads/2022/06/image-2.png",
+        "https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
+        "https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
+        "https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
+        "https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
+        "https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg" ,
+        "https://www-f.keibalab.jp/img/horse/2019106342/2019106342_34.jpg?1653187636",
+        "https://kyoto-tc.jp/images/club/2020/01/side.jpg",
+        "https://jra-van.jp/fun/seri/2020/imgs/select/kougaku1/1s_200713_01.jpg",
+        "https://blogimg.goo.ne.jp/user_image/29/d8/fafbb42d885c8b3a3474ac08ed5510c0.jpg",
+        "https://uma-furi.com/wp-content/uploads/2022/06/image.png", 
+        "https://cdn-ak.f.st-hatena.com/images/fotolife/y/ymhope/20210309/20210309200653.jpg",
+        "https://stat.ameba.jp/user_images/20220201/23/keika00/3f/19/j/o0800053315069363478.jpg?caw=800",
+        "https://pbs.twimg.com/media/FNcuyfnaQAAUPjj.jpg",
+        "https://cdn-ak.f.st-hatena.com/images/fotolife/r/redfray/20200722/20200722191555.jpg",
+        "https://blog-imgs-51.fc2.com/u/m/a/uma1kuti/11007.jpg",
+        "https://blogimg.goo.ne.jp/user_image/72/ff/2f9ab72d51b7851ae7a30a9b3e4e85aa.jpg",
+    ]
 
-    # 特定の条件を満たす輪郭の座標を取得
-    contour_vertex, bbox_position = getContourVertex(contours, descimg, args)
+    for i in inputs:
+        print(i)
+        # 画像読み込み
+        # img = loadImg(mode=args.mode, img_url=args.img_url, img_path=args.img_path)
+        img = loadImg(mode=args.mode, img_url=i,  img_path=args.img_path)
 
-    if args.showinfo:
-        cv2.drawContours(descimg, contours, -1, (255, 255, 0), 3)  # 輪郭描画
+        # インスタンス生成(クラスの__init__メソッドを実行)
+        ds = DeepSegmentation(img, args.color_path, args.transparent)
+        # クラスの__call__メソッドを実行
+        resultimg, contours = ds()  # resultimg shape=(H,W,C,A)
 
-    # キ甲を探索
-    wither_pos_x, wither_pos = getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
-    print("キ甲の長さ:",wither_pos[1][1] - wither_pos[0][1])
+        # 説明するための画像(範囲のラインや座標値テキストの描画などに使用)
+        descimg = deepcopy(resultimg)
 
-    # 胴を探索
-    torso_pos_x = getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args)
-    print("胴の長さ:", torso_pos_x - wither_pos[0][0])
+        # 特定の条件を満たす輪郭の座標を取得
+        contour_vertex, bbox_position = getContourVertex(contours, descimg, args)
 
-    # ともを探索
-    getHindlimb(torso_pos_x, descimg, bbox_position, deepcopy(resultimg), args)
+        if args.showinfo:
+            cv2.drawContours(descimg, contours, -1, (255, 255, 0), 3)  # 輪郭描画
+
+        # キ甲を探索
+        wither_pos_x, wither_pos = getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
+        print("キ甲の長さ:",wither_pos[1][1] - wither_pos[0][1])
+
+        # 胴を探索
+        torso_pos_x = getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args)
+        print("胴の長さ:", torso_pos_x - wither_pos[0][0])
+
+        # ともを探索
+        getHindlimb(torso_pos_x, descimg, bbox_position, deepcopy(resultimg), args)
 
 
     if args.display:
-        displayImg(cv2.vconcat([resultimg, descimg]))  # 画像を表示
+        displayImg(cv2.hconcat([resultimg, descimg]))  # 画像を表示
 
 
 if __name__ == "__main__":
@@ -557,7 +606,6 @@ inputs = [
     "https://blogimg.goo.ne.jp/user_image/65/c0/6efbb4a7472f3841c54fabaf87ec36d3.jpg",
     "https://blogimg.goo.ne.jp/user_image/7a/bf/a62ba86bc344b7cf730254c30dd8a774.jpg",
     "https://blogimg.goo.ne.jp/user_image/73/de/80fce1b7c34744815f4c277f2447fbe8.jpg",   
-
     "https://www-f.keibalab.jp/img/horse/2018103418/2018103418_05.jpg?1621591291",
     "https://www-f.keibalab.jp/img/horse/2014105979/2014105979_05.jpg?1495362433",
     "https://i.daily.jp/horse/horsecheck/2017/11/27/Images/d_10768515.jpg" ,
@@ -571,4 +619,5 @@ inputs = [
     "https://blogimg.goo.ne.jp/user_image/6f/f5/250ad840775c1949b95d890368658fad.jpg",
 ]
 """
+
 
