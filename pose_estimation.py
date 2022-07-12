@@ -1,5 +1,5 @@
-from pydoc import describe
 import cv2
+import csv
 import yaml
 import numpy as np
 import argparse
@@ -536,18 +536,19 @@ def getNeck(contour_vertex, wither_pos, descimg, args):
     :param contour_vertex (type:list) 頂点10以上の近似輪郭の座標リスト
     :param wither_pos (type:list) キ甲を形成する2点の座標
     :param descimg (type:numpy.ndarray) 説明する画像(テキストや直線の描画などに使用)
+    :return neck_length (type:float) 首の長さ
     """
     x1, y1 = contour_vertex[0]  # 始点
     x2, y2 = wither_pos[0]   # 終点
-    necklength = np.sqrt(abs(x2-x1)**2 + abs(y2-y1)**2)
-    necklength = round(necklength,1)
+    neck_length = np.sqrt(abs(x2-x1)**2 + abs(y2-y1)**2)
+    neck_length = round(neck_length,1)
 
     if args.display:
         drawLine(descimg,(x1,y1),(x2,y2),(0,0,255))
         drawText(descimg, "x:"+str(x1), x1, y1)
         cv2.circle(descimg, (x1, y1), 5, (0, 0, 255), thickness=-1)
     
-    return necklength
+    return neck_length
 
 
 def main(args):
@@ -556,6 +557,9 @@ def main(args):
     else:
         inputs = args.img_path
     
+    # 結果を格納するリスト("ファイル名", "キ甲", "胴", "とも", "首")
+    result = []
+
     for name in inputs:
         print(name)
 
@@ -581,25 +585,39 @@ def main(args):
 
         # キ甲を探索
         wither_pos_x, wither_pos, last_toes_pos_x = getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
-        print("キ甲の長さ:",wither_pos[1][1] - wither_pos[0][1])
+        wither_length = wither_pos[1][1] - wither_pos[0][1]
+        print("キ甲の長さ:", wither_length)
 
         # 胴を探索
         torso_pos_x = getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args)
-        print("胴の長さ:", torso_pos_x - wither_pos[0][0])
+        torso_length = torso_pos_x - wither_pos[0][0]
+        print("胴の長さ:", torso_length)
 
         # 尻のx座標を探索
         hip_pos_x = getHip(torso_pos_x, descimg, bbox_position, deepcopy(resultimg))
 
         # ともを探索
         hindlimb_pos_x = getHindlimb(hip_pos_x, contour_vertex, last_toes_pos_x, descimg, args)
-        print("ともの長さ:",hip_pos_x - hindlimb_pos_x)
+        hindlimb_length = hip_pos_x - hindlimb_pos_x
+        print("ともの長さ:", hindlimb_length)
 
         # 首を探索
-        necklength = getNeck(contour_vertex, wither_pos, descimg, args)
-        print("首の長さ:",necklength)
+        neck_length = getNeck(contour_vertex, wither_pos, descimg, args)
+        print("首の長さ:",neck_length)
+
+        # 結果を保存
+        result.append([name, wither_length, torso_length, hindlimb_length, neck_length])
 
         if args.display:
-            displayImg(cv2.hconcat([resultimg, descimg]))  # 画像を表示
+            displayImg(descimg)  # 画像を表示
+
+    if args.csv:
+        # csvファイルに書き込む
+        with open("./result.csv", "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["ファイル名", "キ甲", "胴", "とも", "首"]) # ヘッダー内容
+            writer.writerows(result)
+        print("writed result.csv file")
 
 
 if __name__ == "__main__":
@@ -626,6 +644,7 @@ if __name__ == "__main__":
         "--color_path", type=str, default="./color.txt", help="色情報ファイルのパス"
     )
     parser.add_argument("--showinfo", action="store_true", help="詳細な情報を表示するか")
+    parser.add_argument("--csv", action="store_false", help="結果をcsvファイルに保存するか")
     args = parser.parse_args()
 
     assert (
