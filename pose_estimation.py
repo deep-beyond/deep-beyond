@@ -551,6 +551,63 @@ def getNeck(contour_vertex, wither_pos, descimg, args):
     return neck_length
 
 
+def getleg(torso_pos_x, bbox_position, img, descimg, args):
+    """
+    脚を探索
+    :param torso_pos_x (type:int) 胴のx情報
+    :param bbox_position (type:tuple) 外接矩形座標(x,y,h,w)
+    :param img (type:numpy.ndarray) 原画像
+    :param descimg (type:numpy.ndarray) 説明する画像(テキストや直線の描画などに使用)
+    """
+
+    """
+    1. 探索範囲を設定
+    """
+    bbox_y = bbox_position[1]
+    bbox_h = bbox_position[2]
+    
+    w_border =torso_pos_x
+    h_border = bbox_y+int(bbox_h*2/3)
+
+    if args.showinfo:
+        drawLine(descimg, (0,h_border), (descimg.shape[1], h_border), (255, 0, 255))
+        drawLine(descimg, (w_border, 0), (w_border, descimg.shape[0]), (255, 0, 255))
+
+    # 外接矩形の2/3の高さ~画像高さ,胴の終点~画像幅の範囲
+    img = img[h_border: img.shape[0], w_border:img.shape[1]]
+
+    # 輪郭抽出
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    for contour in contours:
+        # 輪郭の面積が小さいものは除去
+        if cv2.contourArea(contour) < 400:
+            continue
+
+        # 輪郭線の長さ
+        arclen = cv2.arcLength(contour, True)
+        # 輪郭線の近似,描画
+        approx = cv2.approxPolyDP(contour, 0.01 * arclen, True)  
+        cv2.drawContours(img, [approx], -1, (0, 255, 255), 2)
+    
+        # 近似した輪郭の頂点を描画
+        for cnt in approx:
+            x, y = cnt[0][0], cnt[0][1]
+            cv2.circle(img, (x, y), 5, (255, 0, 255), thickness=-1)
+
+    cand_pos = [[approx[i][0][0], approx[i][0][1]] for i in range(len(approx))]
+    cand_pos = sorted(cand_pos, key=lambda x: x[1], reverse=True) # y座標でソート
+
+    # 4つの候補の中で最も右にある頂点を後ろ足の頂点と頂点と
+    for cand in cand_pos[:4]:
+        x, y = cand
+        cv2.circle(img, (x, y), 5, (0, 0, 255), thickness=-1)
+    
+    displayImg(img)
+
+
 def main(args):
     if args.mode == 'net':
         inputs = args.img_url
@@ -605,11 +662,14 @@ def main(args):
         neck_length = getNeck(contour_vertex, wither_pos, descimg, args)
         print("首の長さ:",neck_length)
 
+        # 脚を探索
+        getleg(torso_pos_x, bbox_position, deepcopy(resultimg), descimg, args)
+
         # 結果を保存
         result.append([name, wither_length, torso_length, hindlimb_length, neck_length])
 
-        if args.display:
-            displayImg(descimg)  # 画像を表示
+        # if args.display:
+        #     displayImg(descimg)  # 画像を表示
 
     if args.csv:
         # csvファイルに書き込む
