@@ -339,7 +339,6 @@ def getHip(torso_pos_x, descimg, bbox_position, img):
     尻の先端部の座標を探索
     :param torso_pos_x (type:int) 胴のx情報
     :param bbox_position (type:tuple) 外接矩形座標(x,y,h,w)
-    :param descimg (type:numpy.ndarray) 説明用画像
     :param img (type:numpy.ndarray) 生の画像
     :return hip_pos_x (type:int) 尻の先端部のx座標
     """
@@ -538,6 +537,8 @@ def getNeck(contour_vertex, wither_pos, descimg, args):
     :param descimg (type:numpy.ndarray) 説明する画像(テキストや直線の描画などに使用)
     :return neck_length (type:float) 首の長さ
     """
+    # yの値が最も小さい頂点を始点とする
+    contour_vertex = sorted(contour_vertex, key=lambda x: x[1])
     x1, y1 = contour_vertex[0]  # 始点
     x2, y2 = wither_pos[0]   # 終点
     neck_length = np.sqrt(abs(x2-x1)**2 + abs(y2-y1)**2)
@@ -551,13 +552,15 @@ def getNeck(contour_vertex, wither_pos, descimg, args):
     return neck_length
 
 
-def getleg(torso_pos_x, bbox_position, img, descimg, args):
+def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
     """
-    脚を探索
-    :param torso_pos_x (type:int) 胴のx情報
+    繋(球節:Fetlock ~ 地面ground)を探索
+    :param torso_pos_x (type:int) 胴の終点のx情報
     :param bbox_position (type:tuple) 外接矩形座標(x,y,h,w)
     :param img (type:numpy.ndarray) 原画像
     :param descimg (type:numpy.ndarray) 説明する画像(テキストや直線の描画などに使用)
+    :return fetlock_length (type:int) 繋の長さ
+    :return fetlock_tilt (type:float) 繋の傾き
     """
 
     """
@@ -566,46 +569,145 @@ def getleg(torso_pos_x, bbox_position, img, descimg, args):
     bbox_y = bbox_position[1]
     bbox_h = bbox_position[2]
     
-    w_border =torso_pos_x
-    h_border = bbox_y+int(bbox_h*2/3)
-
-    if args.showinfo:
-        drawLine(descimg, (0,h_border), (descimg.shape[1], h_border), (255, 0, 255))
-        drawLine(descimg, (w_border, 0), (w_border, descimg.shape[0]), (255, 0, 255))
+    w_border = torso_pos_x  # 胴の終点のx情報を左端
+    h_border = bbox_y+int(bbox_h*2/3)   # 上端
 
     # 外接矩形の2/3の高さ~画像高さ,胴の終点~画像幅の範囲
-    img = img[h_border: img.shape[0], w_border:img.shape[1]]
+    img = img[h_border: img.shape[0], w_border:img.shape[1]]    # [上端:下端, 左端:右端]
+
+    """
+    2. 後ろ脚を見るためより範囲を絞る
+    """
 
     # 輪郭抽出
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    contours, _ = cv2.findContours(img_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     for contour in contours:
-        # 輪郭の面積が小さいものは除去
         if cv2.contourArea(contour) < 400:
+            # 輪郭の面積が小さいものは除去
             continue
+        arclen = cv2.arcLength(contour, True)   # 輪郭線の長さ
+        approx = cv2.approxPolyDP(contour, 0.01 * arclen, True)  # 輪郭線の近似,描画
 
-        # 輪郭線の長さ
-        arclen = cv2.arcLength(contour, True)
-        # 輪郭線の近似,描画
-        approx = cv2.approxPolyDP(contour, 0.01 * arclen, True)  
-        cv2.drawContours(img, [approx], -1, (0, 255, 255), 2)
-    
-        # 近似した輪郭の頂点を描画
-        for cnt in approx:
-            x, y = cnt[0][0], cnt[0][1]
-            cv2.circle(img, (x, y), 5, (255, 0, 255), thickness=-1)
-
+    # 近似輪郭の頂点をy座標でソート(大きいもの順)
     cand_pos = [[approx[i][0][0], approx[i][0][1]] for i in range(len(approx))]
-    cand_pos = sorted(cand_pos, key=lambda x: x[1], reverse=True) # y座標でソート
+    cand_pos = sorted(cand_pos, key=lambda x: x[1], reverse=True)
 
-    # 4つの候補の中で最も右にある頂点を後ろ足の頂点と頂点と
+    # y座標が上位4つの座標において最も右にある頂点を後ろ足の頂点と頂点する
+    x_max = 0
+    y_max = 0
     for cand in cand_pos[:4]:
         x, y = cand
-        cv2.circle(img, (x, y), 5, (0, 0, 255), thickness=-1)
+        if x_max < x:
+            x_max = x
+            y_max = y
+
+    limit = int(bbox_h / 7) # 範囲調整用
+    # 画像からはみ出ないため調整
+    rightend = max(img.shape[1], x_max + 30)
+    bottomend = max(img.shape[0], y_max + limit)
+
+    # 画像を指定範囲で切り取り
+    img = img[y_max - limit : bottomend, x_max - 30 : rightend]
+
+    """
+    3. 繋の長さと傾きを探索
+    """
+
+    # 輪郭抽出
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    contours, _ = cv2.findContours(img_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    arclen = cv2.arcLength(contours[0], True)   # 輪郭線の長さ
+    approx = cv2.approxPolyDP(contours[0], 0.002 * arclen, True)  # 輪郭線の近似
+
+    fetlock_x = 0   # 球節のx座標
+    fetlock_y = 0   # 球節のy座標
+    ground_x = 0    # 地面のx座標
+    ground_y = 0    # 地面のy座標
+
+    # 地面(画像内の最も下)のy座標を探索
+    alpha = img[:,:,3]
+    endflg = False
+    for y in range(img.shape[0]-1,0,-1):
+        if endflg:
+            break
+        for x in range(img.shape[1]-1,0,-1):
+            # 透明でない画素であればその時点のy座標を地面のy座標として処理終了
+            if alpha[y][x] == 255:
+                ground_x = x
+                ground_y = y
+                cv2.circle(img, (ground_x, ground_y), 4, (0 , 255, 255), thickness=-1)
+                endflg = True
+                break
+
+    # 球節の座標を探索
+    prev_x = 0  # t-1の時のx座標
+    for i in range(2,len(approx)):  # idx:2から開始 -> 画面最上部の頂点を無視
+        x, y = approx[i][0][0], approx[i][0][1]
+        if x - prev_x > 0:
+            cv2.circle(img, (x, y), 4, (0 , 255, 0), thickness=-1)
+        # print(x-prev_x)
+        # 最も右に位置する(x座標最大)の頂点を球節の座標とする
+        if fetlock_x < x:
+            fetlock_x = x
+            fetlock_y = y
+        prev_x = x  # 時刻t-1 -> 時刻t
     
-    displayImg(img)
+
+    # 繋の傾きを探索
+    prev_y = 0  # 時刻t-1におけるy座標を記録
+    log_x = []   # 条件を満たすx座標を記録
+    log_y = []   # 条件を満たすy座標を記録
+    flg = False
+    for contour in contours:
+        for cnt in contour:
+            x, y = cnt[0][0], cnt[0][1]
+            # y座標の傾きが負になると処理開始
+            if y - prev_y < -1:
+                flg = True
+
+            # 球節よりy座標が大きい場合記録
+            if flg and fetlock_y < y and x > ground_x:
+                log_x.append(x)
+                log_y.append(y)
+                # cv2.circle(jumpsuit_img, (x, y), 4, (0 , 255, 0), thickness=-1)
+            prev_y = y  # 時刻t-1 -> 時刻t
+
+    # 傾きを求めるための球節以外の点
+    endpoint_x = int(sum(log_x) / len(log_x))  
+    endpoint_y = int(sum(log_y) / len(log_y))
+
+    if args.display:
+        cv2.circle(img, (fetlock_x, fetlock_y), 4, (0 , 0, 255), thickness=-1) 
+        cv2.circle(img, (endpoint_x, endpoint_y), 4, (255 , 0, 0), thickness=-1)    # 角度計算に必要な点
+        drawLine(img, (fetlock_x, fetlock_y), ((fetlock_x, ground_y)), (180, 105, 255))
+        drawLine(img, (fetlock_x, fetlock_y), ((endpoint_x, endpoint_y)), (255, 0, 255))
+        img = img.repeat(2, axis=0).repeat(2, axis=1)
+        displayImg(img)
+
+    # 繋の長さを計算
+    fetlock_length = abs(fetlock_y-ground_y)
+
+    # 繋の傾きを計算
+    fetlock_tilt = (endpoint_y - fetlock_y) / (endpoint_x - fetlock_x)
+    fetlock_tilt = round(fetlock_tilt,1)
+
+    # グローバル座標に変換
+    trans_x = x_max - 30 + w_border
+    trans_y = y_max - limit + h_border
+    fetlock_x += trans_x
+    fetlock_y += trans_y
+    endpoint_x += trans_x
+    endpoint_y += trans_y
+    ground_y += trans_y
+
+    if args.display:
+        cv2.circle(descimg, (fetlock_x, fetlock_y), 4, (0 , 0, 255), thickness=-1)  # 球節点
+        cv2.circle(descimg, (endpoint_x, endpoint_y), 4, (255 , 0, 0), thickness=-1)    # 角度計算に必要な点
+        drawLine(descimg, (fetlock_x, fetlock_y), ((fetlock_x, ground_y)), (180, 105, 255))
+        drawLine(descimg, (fetlock_x, fetlock_y), ((endpoint_x, endpoint_y)), (255, 0, 255))
+
+    return fetlock_length, fetlock_tilt
 
 
 def main(args):
@@ -614,7 +716,7 @@ def main(args):
     else:
         inputs = args.img_path
     
-    # 結果を格納するリスト("ファイル名", "キ甲", "胴", "とも", "首")
+    # 結果を格納するリスト("ファイル名", "キ甲", "胴", "とも", "首","繋(長さ)","繋(角度)")
     result = []
 
     for name in inputs:
@@ -625,6 +727,11 @@ def main(args):
             img = loadImg(mode=args.mode, img_url=name)
         else:
             img = loadImg(mode=args.mode, img_path=name)
+        
+        if img.shape[0] < 600:
+            print(img.shape[:2])
+            print("画像高さ600px未満: 画像が小さすぎます")
+            continue
 
         # インスタンス生成(クラスの__init__メソッドを実行)
         ds = DeepSegmentation(img, args.color_path, args.transparent)
@@ -662,20 +769,22 @@ def main(args):
         neck_length = getNeck(contour_vertex, wither_pos, descimg, args)
         print("首の長さ:",neck_length)
 
-        # 脚を探索
-        getleg(torso_pos_x, bbox_position, deepcopy(resultimg), descimg, args)
+        # 繋を探索
+        fetlock_length, fetlock_tilt = getJumpsuit(torso_pos_x, bbox_position, deepcopy(resultimg),descimg, args)
+        print("繋の長さ:",fetlock_length)   
+        print("繋の傾き:",fetlock_tilt)
 
         # 結果を保存
-        result.append([name, wither_length, torso_length, hindlimb_length, neck_length])
+        result.append([name, wither_length, torso_length, hindlimb_length, neck_length, fetlock_length, fetlock_tilt])
 
-        # if args.display:
-        #     displayImg(descimg)  # 画像を表示
+        if args.display:
+            displayImg(descimg)  # 画像を表示
 
     if args.csv:
         # csvファイルに書き込む
         with open("./result.csv", "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["ファイル名", "キ甲", "胴", "とも", "首"]) # ヘッダー内容
+            writer.writerow(["ファイル名", "キ甲", "胴", "とも", "首", "繋(長さ)", "繋(角度)"]) # ヘッダー内容
             writer.writerows(result)
         print("writed result.csv file")
 
