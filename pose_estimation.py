@@ -587,7 +587,11 @@ def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
             # 輪郭の面積が小さいものは除去
             continue
         arclen = cv2.arcLength(contour, True)   # 輪郭線の長さ
-        approx = cv2.approxPolyDP(contour, 0.01 * arclen, True)  # 輪郭線の近似,描画
+        approx = cv2.approxPolyDP(contour, 0.005 * arclen, True)  # 輪郭線の近似,描画
+
+        cv2.drawContours(img, [approx], -1, (0,255,255), 2)
+
+    # displayImg(img)
 
     # 近似輪郭の頂点をy座標でソート(大きいもの順)
     cand_pos = [[approx[i][0][0], approx[i][0][1]] for i in range(len(approx))]
@@ -601,6 +605,9 @@ def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
         if x_max < x:
             x_max = x
             y_max = y
+    
+    # cv2.circle(img, (x_max, y_max), 4, (0 , 0, 255), thickness=-1) 
+    # displayImg(img)
 
     limit = int(bbox_h / 7) # 範囲調整用
     # 画像からはみ出ないため調整
@@ -609,6 +616,7 @@ def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
 
     # 画像を指定範囲で切り取り
     img = img[y_max - limit : bottomend, x_max - 30 : rightend]
+    # displayImg(img)
 
     """
     3. 繋の長さと傾きを探索
