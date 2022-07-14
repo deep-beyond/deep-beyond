@@ -684,20 +684,13 @@ def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
     # 傾きを求めるための球節以外の点
     endpoint_x = int(sum(log_x) / len(log_x))  
     endpoint_y = int(sum(log_y) / len(log_y))
-
-    if args.display:
-        cv2.circle(img, (fetlock_x, fetlock_y), 4, (0 , 0, 255), thickness=-1) 
-        cv2.circle(img, (endpoint_x, endpoint_y), 4, (255 , 0, 0), thickness=-1)    # 角度計算に必要な点
-        drawLine(img, (fetlock_x, fetlock_y), ((fetlock_x, ground_y)), (180, 105, 255))
-        drawLine(img, (fetlock_x, fetlock_y), ((endpoint_x, endpoint_y)), (255, 0, 255))
-        img = img.repeat(2, axis=0).repeat(2, axis=1)
-        displayImg(img)
-
-    # 繋の長さを計算
-    fetlock_length = abs(fetlock_y-ground_y)
-
-    # 繋の傾きを計算
+    
+    # 繋の長さと傾きを計算
     fetlock_tilt = (endpoint_y - fetlock_y) / (endpoint_x - fetlock_x)
+    ground_posx = (ground_y - fetlock_y) / fetlock_tilt + fetlock_x
+    ground_posy = ground_y
+    fetlock_length = np.sqrt(abs(ground_posx - fetlock_x)**2 + abs(ground_posy - fetlock_y))
+    fetlock_length = round(fetlock_length,1)
     fetlock_tilt = round(fetlock_tilt,1)
 
     # グローバル座標に変換
@@ -707,12 +700,15 @@ def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
     fetlock_y += trans_y
     endpoint_x += trans_x
     endpoint_y += trans_y
-    ground_y += trans_y
+    ground_posx += trans_x
+    ground_posx = int(ground_posx)
+    ground_posy += trans_y
+
 
     if args.display:
         cv2.circle(descimg, (fetlock_x, fetlock_y), 4, (0 , 0, 255), thickness=-1)  # 球節点
         cv2.circle(descimg, (endpoint_x, endpoint_y), 4, (255 , 0, 0), thickness=-1)    # 角度計算に必要な点
-        drawLine(descimg, (fetlock_x, fetlock_y), ((fetlock_x, ground_y)), (180, 105, 255))
+        drawLine(descimg, (fetlock_x, fetlock_y), ((ground_posx, ground_posy)), (180, 105, 255))
         drawLine(descimg, (fetlock_x, fetlock_y), ((endpoint_x, endpoint_y)), (255, 0, 255))
 
     return fetlock_length, fetlock_tilt
