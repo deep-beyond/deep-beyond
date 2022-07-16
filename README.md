@@ -5,8 +5,12 @@
 
 ## 概要
 馬の体格分析を行うことを目的<br>
-"キ甲", "胴", "とも", "首","繋(長さ)","繋(角度)を検出<br>
+キ甲, 胴, とも, 首, 繋(長さ), 繋(角度)を検出<br>
 [pose_estimation.py](./pose_estimation.py)
+
+<div align="center">
+<img src="./assets/overview_desc.jpg" height="400px"></img>
+</div>
 
 
 ## 姿勢推定

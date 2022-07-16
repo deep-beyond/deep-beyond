@@ -8,6 +8,7 @@ result.jpg
 result.png
 *.svg
 *.csv
+*.pptx
 
 # C extensions
 *.so
