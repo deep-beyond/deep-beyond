@@ -1,9 +1,12 @@
+import os
+import sys
 import cv2
 import argparse
 import numpy as np
 from copy import deepcopy
 
 # utils.pyの関数
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from utils import loadImg, displayImg
 
 
@@ -235,10 +238,12 @@ class GrabcutSegmentation:
 
 def main(args):
     # 画像読み込み
-    img = loadImg(mode=args.mode, img_url=args.img_url, img_path=args.img_path)
+    img = loadImg(mode = args.mode, 
+                    img_url = args.img_url, 
+                    img_path = args.img_path)
 
-    gs = GrabcutSegmentation(img,args.transparent)  # インスタンス生成(クラスの__init__メソッドを実行)
-    resultimg, contours = gs()  # クラスの__call__メソッドを実行
+    gs = GrabcutSegmentation(img,args.transparent)
+    resultimg, contours = gs()
 
     if args.display:
         displayImg(resultimg)
@@ -262,7 +267,7 @@ if __name__ == "__main__":
         help="入力画像URL",
     )
     parser.add_argument(
-        "--img_path", type=str, default="./img/tokara_horse.jpg", help="ローカル上の画像パス"
+        "--img_path", type=str, default="./assets/tokara_horse.jpg", help="ローカル上の画像パス"
     )
     parser.add_argument("--display", action="store_false", help="表示フラグ")
     parser.add_argument("--save", action="store_true", help="保存フラグ")

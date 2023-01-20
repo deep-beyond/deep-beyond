@@ -4,8 +4,10 @@ import argparse
 import numpy as np
 from PIL import Image
 from torchvision import transforms
-from utils import loadImg, displayImg
 
+import os, sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from utils import loadImg, displayImg
 
 # 前処理設定
 preprocess = transforms.Compose(
@@ -31,10 +33,9 @@ class DeepSegmentation:
         # 画像情報
         self.img = img  # (H,W,3)
 
-        # モデルをダウンロード
-        self.model = torch.hub.load(
-            "pytorch/vision:v0.10.0", "deeplabv3_resnet50", pretrained=True
-        )
+        # モデルを読み込み
+        self.model = torch.jit.load("./assets/deeplabv3_scripted.pt")   # deeplabv3_resnet101
+
         # モデルを推論モードにする
         self.model.eval()
 
@@ -46,19 +47,13 @@ class DeepSegmentation:
         :return resultimg (type:numpy.ndarray) shape=(H,W,C) or shape=(H,W,C,A) GrabCutを適用した画像情報
         :return contours (type:list) マスクの輪郭情報
         """
+
         # 前処理
         inputTensor = preprocess(self.img)  # (3,H,W)
 
         # 形状変更(バッチを考慮)
         inputBatch = inputTensor.unsqueeze(0)  # (1,3,H,W)
 
-        # gpuがあるならば適用
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-            inputBatch = inputBatch.to(device)
-            self.model.to(device)
-
-        # 推論：モデル実行
         with torch.no_grad():
             outputs = self.model(inputBatch)  # [out],[aux]
         out = outputs["out"][0]  # (21,H,W) : 21 = クラス数
@@ -128,10 +123,10 @@ if __name__ == "__main__":
         help="入力画像URL",
     )
     parser.add_argument(
-        "--img_path", type=str, default="./img/tokara_horse.jpg", help="ローカル上の画像パス"
+        "--img_path", type=str, default="./assets/tokara_horse.jpg", help="ローカル上の画像パス"
     )
     parser.add_argument(
-        "--color_path", type=str, default="./color.txt", help="色情報ファイルのパス"
+        "--color_path", type=str, default="./assets/color.txt", help="色情報ファイルのパス"
     )
     parser.add_argument("--display", action="store_false", help="表示フラグ")
     parser.add_argument("--save", action="store_true", help="保存フラグ")

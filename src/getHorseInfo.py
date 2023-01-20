@@ -1,16 +1,14 @@
+"""
+馬の情報
+ "キ甲", "胴", "とも", "首","繋(長さ)","繋(角度)"
+"""
 import cv2
-import csv
-import yaml
 import numpy as np
-import argparse
+
 from copy import deepcopy
 from pylsd.lsd import lsd
+from utils import drawText, drawLine, displayImg
 
-# deep.pyのDeepSementationクラス
-from deep import DeepSegmentation
-
-# utils.pyの関数
-from utils import loadImg, drawText, drawLine, displayImg, update_values
 
 def getContourVertex(contours, img, args):
     """
@@ -482,7 +480,7 @@ def getHip(torso_pos_x, descimg, bbox_position, img):
     return hip_pos_x
 
 
-def getHindlimb(hip_pos_x, contour_vertex, last_tpes_pos_x, descimg, args):
+def getHindlimb(torso_pos_x, bbox_position, contour_vertex, last_tpes_pos_x, img, descimg, args):
     """
     ともを探索
     :param hip_pos_x (type:int) 尻の先端のx座標
@@ -490,6 +488,9 @@ def getHindlimb(hip_pos_x, contour_vertex, last_tpes_pos_x, descimg, args):
     :param descimg (type:numpy.ndarray) 説明する画像(テキストや直線の描画などに使用)
     :return hindlimb_pos_x (type:int) ともの始点のx座標
     """
+
+     # 尻のx座標を探索
+    hip_pos_x = getHip(torso_pos_x, descimg, bbox_position, deepcopy(img))
 
     """
     1. ともの始点を探索
@@ -526,7 +527,7 @@ def getHindlimb(hip_pos_x, contour_vertex, last_tpes_pos_x, descimg, args):
         cv2.circle(descimg, (hip_pos_x, hindlimb_pos_y), 5, (0, 0, 255), thickness=-1)
         drawLine(descimg, (hindlimb_pos_x, hindlimb_pos_y), (hip_pos_x, hindlimb_pos_y), (0, 0, 255))
 
-    return hindlimb_pos_x
+    return hip_pos_x - hindlimb_pos_x
 
 
 def getNeck(contour_vertex, wither_pos, descimg, args):
@@ -591,7 +592,7 @@ def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
 
         cv2.drawContours(img, [approx], -1, (0,255,255), 2)
 
-    # displayImg(img)
+#     displayImg(img)
 
     # 近似輪郭の頂点をy座標でソート(大きいもの順)
     cand_pos = [[approx[i][0][0], approx[i][0][1]] for i in range(len(approx))]
@@ -607,7 +608,7 @@ def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
             y_max = y
     
     # cv2.circle(img, (x_max, y_max), 4, (0 , 0, 255), thickness=-1) 
-    # displayImg(img)
+#     displayImg(img)
 
     limit = int(bbox_h / 7) # 範囲調整用
     # 画像からはみ出ないため調整
@@ -616,7 +617,7 @@ def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
 
     # 画像を指定範囲で切り取り
     img = img[y_max - limit : bottomend, x_max - 30 : rightend]
-    # displayImg(img)
+#     displayImg(img)
 
     """
     3. 繋の長さと傾きを探索
@@ -712,121 +713,3 @@ def getJumpsuit(torso_pos_x, bbox_position, img, descimg, args):
         drawLine(descimg, (fetlock_x, fetlock_y), ((endpoint_x, endpoint_y)), (255, 0, 255))
 
     return fetlock_length, fetlock_tilt
-
-
-def main(args):
-    if args.mode == 'net':
-        inputs = args.img_url
-    else:
-        inputs = args.img_path
-    
-    # 結果を格納するリスト("ファイル名", "キ甲", "胴", "とも", "首","繋(長さ)","繋(角度)")
-    result = []
-
-    for name in inputs:
-        print(name)
-
-        # 画像読み込み
-        if args.mode == 'net':
-            img = loadImg(mode=args.mode, img_url=name)
-        else:
-            img = loadImg(mode=args.mode, img_path=name)
-        
-        if img.shape[0] < 600:
-            print(img.shape[:2])
-            print("画像高さ600px未満: 画像が小さすぎます")
-            continue
-
-        # インスタンス生成(クラスの__init__メソッドを実行)
-        ds = DeepSegmentation(img, args.color_path, args.transparent)
-        # クラスの__call__メソッドを実行
-        resultimg, contours = ds()  # resultimg shape=(H,W,C,A)
-
-        # 説明するための画像(範囲のラインや座標値テキストの描画などに使用)
-        descimg = deepcopy(resultimg)
-
-        # 特定の条件を満たす輪郭の座標を取得
-        contour_vertex, bbox_position = getContourVertex(contours, descimg, args)
-
-        if args.showinfo:
-            cv2.drawContours(descimg, contours, -1, (255, 255, 0), 3)  # 輪郭描画
-
-        # キ甲を探索
-        wither_pos_x, wither_pos, last_toes_pos_x = getWithersPosition(contour_vertex, bbox_position, resultimg, descimg, args)
-        wither_length = wither_pos[1][1] - wither_pos[0][1]
-        print("キ甲の長さ:", wither_length)
-
-        # 胴を探索
-        torso_pos_x = getTorso(contour_vertex, bbox_position, wither_pos_x, descimg, args)
-        torso_length = torso_pos_x - wither_pos[0][0]
-        print("胴の長さ:", torso_length)
-
-        # 尻のx座標を探索
-        hip_pos_x = getHip(torso_pos_x, descimg, bbox_position, deepcopy(resultimg))
-
-        # ともを探索
-        hindlimb_pos_x = getHindlimb(hip_pos_x, contour_vertex, last_toes_pos_x, descimg, args)
-        hindlimb_length = hip_pos_x - hindlimb_pos_x
-        print("ともの長さ:", hindlimb_length)
-
-        # 首を探索
-        neck_length = getNeck(contour_vertex, wither_pos, descimg, args)
-        print("首の長さ:",neck_length)
-
-        # 繋を探索
-        fetlock_length, fetlock_tilt = getJumpsuit(torso_pos_x, bbox_position, deepcopy(resultimg),descimg, args)
-        print("繋の長さ:",fetlock_length)   
-        print("繋の傾き:",fetlock_tilt)
-
-        # 結果を保存
-        result.append([name, wither_length, torso_length, hindlimb_length, neck_length, fetlock_length, fetlock_tilt])
-
-        if args.display:
-            displayImg(descimg)  # 画像を表示
-
-    if args.csv:
-        # csvファイルに書き込む
-        with open("./result.csv", "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["ファイル名", "キ甲", "胴", "とも", "首", "繋(長さ)", "繋(角度)"]) # ヘッダー内容
-            writer.writerows(result)
-        print("writed result.csv file")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Segmentation")
-    parser.add_argument(
-        "--mode", type=str, choices=["net", "local"], default="net", help="入力画像先"
-    )
-    parser.add_argument(
-        "--img_url",
-        nargs='+',
-        default="[https://blogimg.goo.ne.jp/user_image/51/48/a4f2767dcdda226304984ab5fd510435.jpg]",
-        help="入力画像URL",
-    )
-    parser.add_argument(
-        "--img_path", type=str, default="./img/tokara_horse.jpg", help="ローカル上の画像パス"
-    )
-    parser.add_argument("--display", action="store_false", help="表示フラグ")
-    parser.add_argument("--save", action="store_true", help="保存フラグ")
-    parser.add_argument("--transparent", action="store_false", help="透過フラグ")
-    parser.add_argument(
-        "--save_format", choices=["jpg", "png"], default="png", help="保存形式"
-    )
-    parser.add_argument(
-        "--color_path", type=str, default="./color.txt", help="色情報ファイルのパス"
-    )
-    parser.add_argument("--showinfo", action="store_true", help="詳細な情報を表示するか")
-    parser.add_argument("--csv", action="store_false", help="結果をcsvファイルに保存するか")
-    args = parser.parse_args()
-
-    assert (
-        args.transparent and args.save_format == "png"
-    ), "jpg format can't transparent"
-
-    # ymlファイルに記述された引数で更新
-    with open("./input.yml", 'r') as handle:
-        options_yaml = yaml.load(handle, Loader=yaml.SafeLoader)
-    update_values(options_yaml, vars(args))
-
-    main(args)

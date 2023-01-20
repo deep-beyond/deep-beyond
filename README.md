@@ -6,7 +6,6 @@
 ## 概要
 馬の体格分析を行うことを目的<br>
 キ甲, 胴, とも, 首, 繋(長さ), 繋(角度)を検出<br>
-[pose_estimation.py](./pose_estimation.py)
 
 <div align="center">
 <img src="./assets/overview_desc.jpg" height="400px"></img>
@@ -61,6 +60,9 @@ conda env create --file env.yml
     - とも,首の検出が可能に
     - 結果をcsvファイルに保存可能に
 - (2022/7/14)：繋の検出が可能に
+- (2023/1/20)：
+    - ファイル構造を変更、より見やすく
+    - セグメンテーション処理速度向上
 
 <hr>
 
@@ -74,7 +76,7 @@ conda env create --file env.yml
 
 二値化・輪郭抽出による馬の領域抽出
 
-[ソースコード：contour.py](./contour.py)
+[ソースコード：contour.py](./src/segmentation/contour.py)
 </summary>
 
 トラックバーによって手動でマスクを設定
@@ -104,7 +106,7 @@ conda env create --file env.yml
 
 
 GrabCutによる馬の領域抽出
-[ソースコード：grabcut.py](./grabcut.py)
+[ソースコード：grabcut.py](./src/segmentation/grabcut.py)
 
 
 <img src="./assets/desc2.jpg" style="height:200px"></img><br>
@@ -133,7 +135,7 @@ GrabCutによる馬の領域抽出
 <summary>深層学習ベース</summary>
 
 ## 深層学習ベース
-[ソースコード：deep.py](./deep.py)
+[ソースコード：deeplab_v3.py](./src/segmentation/deeplab_v3.py)
 
 semantic segmentationによる馬の領域抽出
 

@@ -1,8 +1,11 @@
+import os
+import sys
 import cv2
 import argparse
 import numpy as np
 
 # utils.pyの関数
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from utils import loadImg, displayImg
 
 
@@ -226,7 +229,7 @@ if __name__ == "__main__":
         help="入力画像URL",
     )
     parser.add_argument(
-        "--img_path", type=str, default="./img/tokara_horse.jpg", help="ローカル上の画像パス"
+        "--img_path", type=str, default="./assets/tokara_horse.jpg", help="ローカル上の画像パス"
     )
     parser.add_argument("--display", action="store_false", help="表示フラグ")
     parser.add_argument("--save", action="store_true", help="保存フラグ")

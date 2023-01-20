@@ -96,3 +96,13 @@ def update_values(dict_from, dict_to):
             update_values(dict_from[key], dict_to[key])
         elif value is not None:
             dict_to[key] = dict_from[key]
+
+def saveTorchScriptmodel():
+    import torch
+    model = torch.hub.load(
+        "pytorch/vision:v0.10.0", "deeplabv3_resnet101", pretrained=True
+    )
+    scripted_block = torch.jit.script(model)
+    scripted_block.save("./assets/deeplabv3_scripted.pt")
+
+saveTorchScriptmodel()
