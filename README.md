@@ -65,10 +65,15 @@ conda env create --file env.yml
 - (2023/1/20)：
     - ファイル構造を変更、より見やすく
     - セグメンテーション処理速度向上(TorchScript)
-    - Segformerを導入する場合ファインチューニングする必要があると理解
     
-<hr>
+## 関連事項や今後
+入力が画像と動画では別問題となる<br>
+画像の場合ではセグメンテーション, 具体的にはSegformerを導入することで精度向上に繋がるが
+馬に関するデータで学習していないためファインチューニングの必要<br>
+動画の場合では既存研究の「From Synthetic to Real: Unsupervised Domain Adaptation for Animal Pose Estimation」や「TapNet」,
+または「DeepLabCut」の導入が考えられる。
 
+<hr>
 ## segmentationアプローチ
 
 <details>
