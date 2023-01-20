@@ -44,6 +44,8 @@ conda env create --file env.yml
 - pillow:9.0.1
 - opencv:4.0.1
 
+[utils.py](./src/utils.py)のsaveTorchScriptmodelを実行してモデルをローカルに保存してください
+
 ## 主な変更点
 - (2022/6/23)：リポジトリ作成
 - (2022/6/26)：深層学習プログラム作成
@@ -62,7 +64,7 @@ conda env create --file env.yml
 - (2022/7/14)：繋の検出が可能に
 - (2023/1/20)：
     - ファイル構造を変更、より見やすく
-    - セグメンテーション処理速度向上
+    - セグメンテーション処理速度向上(TorchScript)
 
 <hr>
 
