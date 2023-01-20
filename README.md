@@ -65,7 +65,8 @@ conda env create --file env.yml
 - (2023/1/20)：
     - ファイル構造を変更、より見やすく
     - セグメンテーション処理速度向上(TorchScript)
-
+    - Segformerを導入する場合ファインチューニングする必要があると理解
+    
 <hr>
 
 ## segmentationアプローチ
